@@ -1,0 +1,231 @@
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useMemo, useState } from "react";
+import { SiteHeader } from "@/components/site-header";
+import { MapMarker, MapSurface } from "@/components/map-surface";
+import { StationCard } from "@/components/station-card";
+import { demoStations, type Station } from "@/data/stations";
+
+export const Route = createFileRoute("/find-station")({
+  head: () => ({
+    meta: [
+      { title: "Find a Station — E-Charge" },
+      {
+        name: "description",
+        content:
+          "Search nearby electric motorcycle charging and battery-swap stations by name, area, town or county, and navigate to the nearest one.",
+      },
+      { property: "og:title", content: "Find a Station — E-Charge" },
+      {
+        property: "og:description",
+        content:
+          "Nearby verified charging and battery-swap stations with road distance, ETA and live availability.",
+      },
+    ],
+  }),
+  component: FindStation,
+});
+
+type LocationState = "prompt" | "granted" | "denied";
+
+const markerTone = (station: Station) =>
+  station.status === "closed" || station.status === "unavailable"
+    ? "danger"
+    : station.type === "both"
+      ? "signal"
+      : "amber";
+
+const markerLabel = (station: Station) =>
+  `${station.type === "both" ? "Both" : station.type === "swap" ? "Swap" : "Charging"} · ${station.distanceKm}km`;
+
+function FindStation() {
+  const [locationState, setLocationState] = useState<LocationState>("prompt");
+  const [query, setQuery] = useState("");
+  const [battery, setBattery] = useState("");
+  const [radiusKm, setRadiusKm] = useState(5);
+
+  const requestLocation = () => {
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      setLocationState("denied");
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      () => setLocationState("granted"),
+      () => setLocationState("denied"),
+    );
+  };
+
+  const results = useMemo(() => {
+    const term = query.trim().toLowerCase();
+    return demoStations
+      .filter((station) => station.distanceKm <= radiusKm)
+      .filter((station) =>
+        term.length === 0
+          ? true
+          : [station.name, station.area, station.county, station.address]
+              .join(" ")
+              .toLowerCase()
+              .includes(term),
+      )
+      .sort((a, b) => a.etaMin - b.etaMin);
+  }, [query, radiusKm]);
+
+  return (
+    <div className="flex min-h-screen flex-col bg-ink">
+      <div className="relative">
+        <div className="absolute inset-0 map-surface" />
+        <div className="relative">
+          <SiteHeader />
+        </div>
+      </div>
+
+      <MapSurface className="h-[300px] sm:h-[340px]" showRider={locationState === "granted"}>
+        {results.map((station) => (
+          <MapMarker
+            key={station.id}
+            left={station.mapPosition.left}
+            top={station.mapPosition.top}
+            tone={markerTone(station)}
+            label={markerLabel(station)}
+          />
+        ))}
+      </MapSurface>
+
+      <div className="sheet-in -mt-6 flex-1 rounded-t-[24px] frost px-5 pt-3 pb-16 ring-1 ring-black/5 sm:px-8">
+        <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-ink/20" />
+
+        <div className="mx-auto max-w-2xl">
+          {locationState === "prompt" ? (
+            <div className="rounded-2xl bg-signal/12 px-4 py-4 ring-1 ring-signal/30">
+              <p className="font-display text-[15px] font-semibold text-ink">
+                Allow E-Charge to access your location
+              </p>
+              <p className="mt-1 text-sm leading-snug text-pretty text-ink/70">
+                This is needed to find nearby stations and calculate routes.
+              </p>
+              <button
+                type="button"
+                onClick={requestLocation}
+                className="mt-3 flex min-h-[48px] w-full items-center justify-center rounded-xl bg-signal text-sm font-semibold text-ink ring-1 ring-signal transition-colors hover:bg-signal/90"
+              >
+                USE MY LOCATION
+              </button>
+            </div>
+          ) : null}
+
+          {locationState === "denied" ? (
+            <div className="rounded-2xl bg-amber/12 px-4 py-4 ring-1 ring-amber/30">
+              <p className="font-display text-[15px] font-semibold text-ink">
+                Location access is required to find nearby stations.
+              </p>
+              <p className="mt-1 text-sm leading-snug text-pretty text-ink/70">
+                You can try again, or pick your starting point on the map instead.
+              </p>
+              <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                <button
+                  type="button"
+                  onClick={requestLocation}
+                  className="flex min-h-[48px] flex-1 items-center justify-center rounded-xl bg-ink text-sm font-semibold text-paper transition-colors hover:bg-ink/90"
+                >
+                  TRY AGAIN
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLocationState("granted")}
+                  className="flex min-h-[48px] flex-1 items-center justify-center rounded-xl bg-paper/70 text-sm font-medium text-ink ring-1 ring-black/10 transition-colors hover:bg-paper"
+                >
+                  CHOOSE LOCATION ON MAP
+                </button>
+              </div>
+            </div>
+          ) : null}
+
+          {locationState === "granted" ? (
+            <div className="flex items-center gap-2 rounded-2xl bg-signal/12 px-4 py-3 ring-1 ring-signal/30">
+              <span className="size-3 shrink-0 rounded-full bg-signal" />
+              <p className="text-sm leading-snug text-pretty text-ink/80">
+                Using your location. Showing stations within{" "}
+                <strong className="font-semibold">{radiusKm} km</strong>, nearest travel time first.
+              </p>
+            </div>
+          ) : null}
+
+          <div className="mt-4 flex items-center gap-2 rounded-2xl bg-paper/60 px-4 py-3 ring-1 ring-black/5">
+            <span className="text-lg text-neutral">⌕</span>
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              className="w-full bg-transparent text-base text-ink placeholder:text-neutral focus:outline-none"
+              placeholder="Search station, area, town or county"
+            />
+          </div>
+
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            <label className="flex items-center gap-2 rounded-xl bg-paper/60 px-3 py-2 ring-1 ring-black/5">
+              <span className="text-xs text-ink/60">Battery level (optional)</span>
+              <input
+                value={battery}
+                onChange={(event) => setBattery(event.target.value)}
+                inputMode="numeric"
+                placeholder="—"
+                className="w-12 bg-transparent text-sm text-ink placeholder:text-neutral focus:outline-none"
+              />
+              <span className="text-sm text-ink/60">%</span>
+            </label>
+            <span className="text-xs text-neutral">
+              Battery level is never required to search.
+            </span>
+          </div>
+
+          <div className="mt-5 flex items-baseline justify-between">
+            <h2 className="font-display text-lg font-semibold text-ink">Nearby stations</h2>
+            <span className="text-xs text-neutral">
+              {results.length} within {radiusKm} km
+            </span>
+          </div>
+
+          <div className="mt-3 space-y-3">
+            {results.length > 0 ? (
+              results.map((station) => <StationCard key={station.id} station={station} />)
+            ) : (
+              <div className="rounded-[18px] bg-paper/70 p-5 text-center ring-1 ring-black/5">
+                <p className="font-display text-[17px] font-semibold text-ink">
+                  No verified stations found nearby.
+                </p>
+                <p className="mt-1 text-sm text-ink/60">
+                  We searched a {radiusKm} km radius around your location.
+                </p>
+                <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+                  <button
+                    type="button"
+                    onClick={() => setRadiusKm((value) => value + 10)}
+                    className="flex min-h-[46px] flex-1 items-center justify-center rounded-xl bg-signal text-sm font-semibold text-ink ring-1 ring-signal"
+                  >
+                    EXPAND SEARCH
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setQuery("");
+                      setRadiusKm(500);
+                    }}
+                    className="flex min-h-[46px] flex-1 items-center justify-center rounded-xl bg-paper/70 text-sm font-medium text-ink ring-1 ring-black/10"
+                  >
+                    VIEW ALL STATIONS
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <p className="mt-6 text-center text-xs text-neutral">
+            Demo stations shown for now. Real road distance and ETA arrive with routing in a later
+            stage.{" "}
+            <Link to="/register-station" className="underline underline-offset-2">
+              Own a station?
+            </Link>
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
