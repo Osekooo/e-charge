@@ -10,33 +10,102 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AboutRouteImport } from './routes/about'
+import { Route as ContactRouteImport } from './routes/contact'
+import { Route as FindStationRouteImport } from './routes/find-station'
+import { Route as RegisterStationRouteImport } from './routes/register-station'
+import { Route as StationsStationIdRouteImport } from './routes/stations.$stationId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AboutRoute = AboutRouteImport.update({
+  id: '/about',
+  path: '/about',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ContactRoute = ContactRouteImport.update({
+  id: '/contact',
+  path: '/contact',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FindStationRoute = FindStationRouteImport.update({
+  id: '/find-station',
+  path: '/find-station',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RegisterStationRoute = RegisterStationRouteImport.update({
+  id: '/register-station',
+  path: '/register-station',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const StationsStationIdRoute = StationsStationIdRouteImport.update({
+  id: '/stations/$stationId',
+  path: '/stations/$stationId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/about': typeof AboutRoute
+  '/contact': typeof ContactRoute
+  '/find-station': typeof FindStationRoute
+  '/register-station': typeof RegisterStationRoute
+  '/stations/$stationId': typeof StationsStationIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/about': typeof AboutRoute
+  '/contact': typeof ContactRoute
+  '/find-station': typeof FindStationRoute
+  '/register-station': typeof RegisterStationRoute
+  '/stations/$stationId': typeof StationsStationIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/about': typeof AboutRoute
+  '/contact': typeof ContactRoute
+  '/find-station': typeof FindStationRoute
+  '/register-station': typeof RegisterStationRoute
+  '/stations/$stationId': typeof StationsStationIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/about'
+    | '/contact'
+    | '/find-station'
+    | '/register-station'
+    | '/stations/$stationId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/about'
+    | '/contact'
+    | '/find-station'
+    | '/register-station'
+    | '/stations/$stationId'
+  id:
+    | '__root__'
+    | '/'
+    | '/about'
+    | '/contact'
+    | '/find-station'
+    | '/register-station'
+    | '/stations/$stationId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AboutRoute: typeof AboutRoute
+  ContactRoute: typeof ContactRoute
+  FindStationRoute: typeof FindStationRoute
+  RegisterStationRoute: typeof RegisterStationRoute
+  StationsStationIdRoute: typeof StationsStationIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +117,51 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/about': {
+      id: '/about'
+      path: '/about'
+      fullPath: '/about'
+      preLoaderRoute: typeof AboutRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/contact': {
+      id: '/contact'
+      path: '/contact'
+      fullPath: '/contact'
+      preLoaderRoute: typeof ContactRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/find-station': {
+      id: '/find-station'
+      path: '/find-station'
+      fullPath: '/find-station'
+      preLoaderRoute: typeof FindStationRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/register-station': {
+      id: '/register-station'
+      path: '/register-station'
+      fullPath: '/register-station'
+      preLoaderRoute: typeof RegisterStationRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/stations/$stationId': {
+      id: '/stations/$stationId'
+      path: '/stations/$stationId'
+      fullPath: '/stations/$stationId'
+      preLoaderRoute: typeof StationsStationIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AboutRoute: AboutRoute,
+  ContactRoute: ContactRoute,
+  FindStationRoute: FindStationRoute,
+  RegisterStationRoute: RegisterStationRoute,
+  StationsStationIdRoute: StationsStationIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
