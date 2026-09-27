@@ -45,14 +45,17 @@ export function CheckRow({ label }: { label: string }) {
 export function PrimaryButton({
   children,
   type = "submit",
+  disabled,
 }: {
   children: ReactNode;
   type?: "submit" | "button";
+  disabled?: boolean;
 }) {
   return (
     <button
       type={type}
-      className="flex min-h-[52px] w-full items-center justify-center rounded-2xl bg-signal px-5 text-base font-semibold text-ink ring-1 ring-signal transition-colors hover:bg-signal/90"
+      disabled={disabled}
+      className="flex min-h-[52px] w-full items-center justify-center rounded-2xl bg-signal px-5 text-base font-semibold text-ink ring-1 ring-signal transition-colors hover:bg-signal/90 disabled:cursor-not-allowed disabled:opacity-60"
     >
       {children}
     </button>

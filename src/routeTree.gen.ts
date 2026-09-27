@@ -10,21 +10,26 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as ContactRouteImport } from './routes/contact'
 import { Route as FindStationRouteImport } from './routes/find-station'
 import { Route as RegisterStationRouteImport } from './routes/register-station'
 import { Route as AdminDashboardRouteImport } from './routes/admin.dashboard'
-import { Route as OwnerDashboardRouteImport } from './routes/owner.dashboard'
 import { Route as OwnerForgotPasswordRouteImport } from './routes/owner.forgot-password'
 import { Route as OwnerLoginRouteImport } from './routes/owner.login'
 import { Route as OwnerSignupRouteImport } from './routes/owner.signup'
 import { Route as StationsStationIdRouteImport } from './routes/stations.$stationId'
-import { Route as OwnerStationsNewRouteImport } from './routes/owner.stations.new'
+import { Route as AuthenticatedOwnerDashboardRouteImport } from './routes/_authenticated/owner.dashboard'
+import { Route as AuthenticatedOwnerStationsNewRouteImport } from './routes/_authenticated/owner.stations.new'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
+  id: '/_authenticated',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AboutRoute = AboutRouteImport.update({
@@ -52,11 +57,6 @@ const AdminDashboardRoute = AdminDashboardRouteImport.update({
   path: '/admin/dashboard',
   getParentRoute: () => rootRouteImport,
 } as any)
-const OwnerDashboardRoute = OwnerDashboardRouteImport.update({
-  id: '/owner/dashboard',
-  path: '/owner/dashboard',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const OwnerForgotPasswordRoute = OwnerForgotPasswordRouteImport.update({
   id: '/owner/forgot-password',
   path: '/owner/forgot-password',
@@ -77,11 +77,18 @@ const StationsStationIdRoute = StationsStationIdRouteImport.update({
   path: '/stations/$stationId',
   getParentRoute: () => rootRouteImport,
 } as any)
-const OwnerStationsNewRoute = OwnerStationsNewRouteImport.update({
-  id: '/owner/stations/new',
-  path: '/owner/stations/new',
-  getParentRoute: () => rootRouteImport,
-} as any)
+const AuthenticatedOwnerDashboardRoute =
+  AuthenticatedOwnerDashboardRouteImport.update({
+    id: '/owner/dashboard',
+    path: '/owner/dashboard',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedOwnerStationsNewRoute =
+  AuthenticatedOwnerStationsNewRouteImport.update({
+    id: '/owner/stations/new',
+    path: '/owner/stations/new',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -90,12 +97,12 @@ export interface FileRoutesByFullPath {
   '/find-station': typeof FindStationRoute
   '/register-station': typeof RegisterStationRoute
   '/admin/dashboard': typeof AdminDashboardRoute
-  '/owner/dashboard': typeof OwnerDashboardRoute
   '/owner/forgot-password': typeof OwnerForgotPasswordRoute
   '/owner/login': typeof OwnerLoginRoute
   '/owner/signup': typeof OwnerSignupRoute
   '/stations/$stationId': typeof StationsStationIdRoute
-  '/owner/stations/new': typeof OwnerStationsNewRoute
+  '/owner/dashboard': typeof AuthenticatedOwnerDashboardRoute
+  '/owner/stations/new': typeof AuthenticatedOwnerStationsNewRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -104,27 +111,28 @@ export interface FileRoutesByTo {
   '/find-station': typeof FindStationRoute
   '/register-station': typeof RegisterStationRoute
   '/admin/dashboard': typeof AdminDashboardRoute
-  '/owner/dashboard': typeof OwnerDashboardRoute
   '/owner/forgot-password': typeof OwnerForgotPasswordRoute
   '/owner/login': typeof OwnerLoginRoute
   '/owner/signup': typeof OwnerSignupRoute
   '/stations/$stationId': typeof StationsStationIdRoute
-  '/owner/stations/new': typeof OwnerStationsNewRoute
+  '/owner/dashboard': typeof AuthenticatedOwnerDashboardRoute
+  '/owner/stations/new': typeof AuthenticatedOwnerStationsNewRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/about': typeof AboutRoute
   '/contact': typeof ContactRoute
   '/find-station': typeof FindStationRoute
   '/register-station': typeof RegisterStationRoute
   '/admin/dashboard': typeof AdminDashboardRoute
-  '/owner/dashboard': typeof OwnerDashboardRoute
   '/owner/forgot-password': typeof OwnerForgotPasswordRoute
   '/owner/login': typeof OwnerLoginRoute
   '/owner/signup': typeof OwnerSignupRoute
   '/stations/$stationId': typeof StationsStationIdRoute
-  '/owner/stations/new': typeof OwnerStationsNewRoute
+  '/_authenticated/owner/dashboard': typeof AuthenticatedOwnerDashboardRoute
+  '/_authenticated/owner/stations/new': typeof AuthenticatedOwnerStationsNewRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -135,11 +143,11 @@ export interface FileRouteTypes {
     | '/find-station'
     | '/register-station'
     | '/admin/dashboard'
-    | '/owner/dashboard'
     | '/owner/forgot-password'
     | '/owner/login'
     | '/owner/signup'
     | '/stations/$stationId'
+    | '/owner/dashboard'
     | '/owner/stations/new'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -149,41 +157,41 @@ export interface FileRouteTypes {
     | '/find-station'
     | '/register-station'
     | '/admin/dashboard'
-    | '/owner/dashboard'
     | '/owner/forgot-password'
     | '/owner/login'
     | '/owner/signup'
     | '/stations/$stationId'
+    | '/owner/dashboard'
     | '/owner/stations/new'
   id:
     | '__root__'
     | '/'
+    | '/_authenticated'
     | '/about'
     | '/contact'
     | '/find-station'
     | '/register-station'
     | '/admin/dashboard'
-    | '/owner/dashboard'
     | '/owner/forgot-password'
     | '/owner/login'
     | '/owner/signup'
     | '/stations/$stationId'
-    | '/owner/stations/new'
+    | '/_authenticated/owner/dashboard'
+    | '/_authenticated/owner/stations/new'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AboutRoute: typeof AboutRoute
   ContactRoute: typeof ContactRoute
   FindStationRoute: typeof FindStationRoute
   RegisterStationRoute: typeof RegisterStationRoute
   AdminDashboardRoute: typeof AdminDashboardRoute
-  OwnerDashboardRoute: typeof OwnerDashboardRoute
   OwnerForgotPasswordRoute: typeof OwnerForgotPasswordRoute
   OwnerLoginRoute: typeof OwnerLoginRoute
   OwnerSignupRoute: typeof OwnerSignupRoute
   StationsStationIdRoute: typeof StationsStationIdRoute
-  OwnerStationsNewRoute: typeof OwnerStationsNewRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -193,6 +201,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated': {
+      id: '/_authenticated'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AuthenticatedRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/about': {
@@ -230,13 +245,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminDashboardRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/owner/dashboard': {
-      id: '/owner/dashboard'
-      path: '/owner/dashboard'
-      fullPath: '/owner/dashboard'
-      preLoaderRoute: typeof OwnerDashboardRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/owner/forgot-password': {
       id: '/owner/forgot-password'
       path: '/owner/forgot-password'
@@ -265,29 +273,48 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof StationsStationIdRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/owner/stations/new': {
-      id: '/owner/stations/new'
+    '/_authenticated/owner/dashboard': {
+      id: '/_authenticated/owner/dashboard'
+      path: '/owner/dashboard'
+      fullPath: '/owner/dashboard'
+      preLoaderRoute: typeof AuthenticatedOwnerDashboardRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/owner/stations/new': {
+      id: '/_authenticated/owner/stations/new'
       path: '/owner/stations/new'
       fullPath: '/owner/stations/new'
-      preLoaderRoute: typeof OwnerStationsNewRouteImport
-      parentRoute: typeof rootRouteImport
+      preLoaderRoute: typeof AuthenticatedOwnerStationsNewRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
   }
 }
 
+interface AuthenticatedRouteRouteChildren {
+  AuthenticatedOwnerDashboardRoute: typeof AuthenticatedOwnerDashboardRoute
+  AuthenticatedOwnerStationsNewRoute: typeof AuthenticatedOwnerStationsNewRoute
+}
+
+const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
+  AuthenticatedOwnerDashboardRoute: AuthenticatedOwnerDashboardRoute,
+  AuthenticatedOwnerStationsNewRoute: AuthenticatedOwnerStationsNewRoute,
+}
+
+const AuthenticatedRouteRouteWithChildren =
+  AuthenticatedRouteRoute._addFileChildren(AuthenticatedRouteRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AboutRoute: AboutRoute,
   ContactRoute: ContactRoute,
   FindStationRoute: FindStationRoute,
   RegisterStationRoute: RegisterStationRoute,
   AdminDashboardRoute: AdminDashboardRoute,
-  OwnerDashboardRoute: OwnerDashboardRoute,
   OwnerForgotPasswordRoute: OwnerForgotPasswordRoute,
   OwnerLoginRoute: OwnerLoginRoute,
   OwnerSignupRoute: OwnerSignupRoute,
   StationsStationIdRoute: StationsStationIdRoute,
-  OwnerStationsNewRoute: OwnerStationsNewRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
