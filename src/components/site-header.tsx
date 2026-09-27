@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
 
 const links = [
   { to: "/", label: "Home" },
@@ -11,6 +12,21 @@ const links = [
 
 export function SiteHeader() {
   const [open, setOpen] = useState(false);
+  const [signedIn, setSignedIn] = useState(false);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => setSignedIn(Boolean(data.session)));
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSignedIn(Boolean(session));
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const accountLink = signedIn
+    ? { to: "/owner/dashboard", label: "Owner Dashboard" }
+    : { to: "/owner/login", label: "Station Owner Login" };
 
   return (
     <header className="relative z-30">
@@ -36,10 +52,10 @@ export function SiteHeader() {
             </Link>
           ))}
           <Link
-            to="/owner/login"
+            to={accountLink.to}
             className="ml-2 rounded-full bg-secondary px-4 py-2 text-sm font-medium text-paper ring-1 ring-border transition-colors hover:bg-muted"
           >
-            Station Owner Login
+            {accountLink.label}
           </Link>
         </nav>
 
@@ -68,11 +84,11 @@ export function SiteHeader() {
             </Link>
           ))}
           <Link
-            to="/owner/login"
+            to={accountLink.to}
             onClick={() => setOpen(false)}
             className="mt-2 flex min-h-[48px] items-center justify-center rounded-xl bg-secondary text-base font-medium text-paper ring-1 ring-border"
           >
-            Station Owner Login
+            {accountLink.label}
           </Link>
         </div>
       ) : null}
