@@ -1,8 +1,8 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { PageShell, Panel } from "@/components/page-shell";
-import { Notice } from "@/components/form-controls";
+import { supabase } from "@/integrations/supabase/client";
 
-export const Route = createFileRoute("/owner/dashboard")({
+export const Route = createFileRoute("/_authenticated/owner/dashboard")({
   head: () => ({
     meta: [
       { title: "Owner Dashboard — E-Charge" },
@@ -22,6 +22,13 @@ export const Route = createFileRoute("/owner/dashboard")({
 });
 
 function OwnerDashboard() {
+  const navigate = useNavigate();
+
+  async function handleSignOut() {
+    await supabase.auth.signOut();
+    navigate({ to: "/" });
+  }
+
   return (
     <PageShell
       eyebrow="Owner dashboard"
@@ -47,10 +54,13 @@ function OwnerDashboard() {
       </div>
 
       <div className="mt-4">
-        <Notice tone="warn">
-          This dashboard is the visual structure only. Accounts, stations and availability start
-          saving when the backend is switched on in the next stages.
-        </Notice>
+        <button
+          type="button"
+          onClick={handleSignOut}
+          className="text-sm text-ink/60 underline underline-offset-2 hover:text-ink"
+        >
+          Sign out
+        </button>
       </div>
     </PageShell>
   );

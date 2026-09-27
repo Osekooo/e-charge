@@ -11,7 +11,7 @@ import {
   TextInput,
 } from "@/components/form-controls";
 
-export const Route = createFileRoute("/owner/stations/new")({
+export const Route = createFileRoute("/_authenticated/owner/stations/new")({
   head: () => ({
     meta: [
       { title: "Register a Station — E-Charge" },
