@@ -71,6 +71,7 @@ function OwnerSignup() {
 
   async function handleGoogleSignup() {
     setError(null);
+    localStorage.setItem("echarge_post_auth_redirect", "/owner/dashboard");
     const result = await lovable.auth.signInWithOAuth("google", {
       redirect_uri: window.location.origin,
     });

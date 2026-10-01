@@ -120,12 +120,20 @@ function RootComponent() {
   const router = useRouter();
 
   useEffect(() => {
+    const goAfterOAuth = (hasSession: boolean) => {
+      const target = localStorage.getItem("echarge_post_auth_redirect");
+      if (!hasSession || target !== "/owner/dashboard") return;
+      localStorage.removeItem("echarge_post_auth_redirect");
+      router.navigate({ to: "/owner/dashboard" });
+    };
+    supabase.auth.getSession().then(({ data }) => goAfterOAuth(!!data.session));
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((event) => {
+    } = supabase.auth.onAuthStateChange((event, session) => {
       if (event !== "SIGNED_IN" && event !== "SIGNED_OUT" && event !== "USER_UPDATED") return;
       router.invalidate();
       if (event !== "SIGNED_OUT") queryClient.invalidateQueries();
+      if (event === "SIGNED_IN") goAfterOAuth(!!session);
     });
     return () => subscription.unsubscribe();
   }, [router, queryClient]);
