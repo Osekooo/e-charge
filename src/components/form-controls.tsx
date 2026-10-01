@@ -33,10 +33,23 @@ export function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
   return <select {...props} className={inputClass} />;
 }
 
-export function CheckRow({ label }: { label: string }) {
+export function CheckRow({
+  label,
+  checked,
+  onChange,
+}: {
+  label: string;
+  checked?: boolean;
+  onChange?: (checked: boolean) => void;
+}) {
   return (
     <label className="flex min-h-[44px] items-center gap-3 rounded-xl bg-paper/60 px-4 ring-1 ring-black/5">
-      <input type="checkbox" className="size-4 accent-[oklch(0.556_0.0895_186)]" />
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={onChange ? (event) => onChange(event.target.checked) : undefined}
+        className="size-4 accent-[oklch(0.556_0.0895_186)]"
+      />
       <span className="text-sm text-ink/80">{label}</span>
     </label>
   );
@@ -66,16 +79,19 @@ export function GhostButton({
   children,
   type = "button",
   onClick,
+  disabled,
 }: {
   children: ReactNode;
   type?: "submit" | "button";
   onClick?: () => void;
+  disabled?: boolean;
 }) {
   return (
     <button
       type={type}
       onClick={onClick}
-      className="flex min-h-[52px] w-full items-center justify-center rounded-2xl bg-paper/60 px-5 text-base font-medium text-ink ring-1 ring-black/10 transition-colors hover:bg-paper/80"
+      disabled={disabled}
+      className="flex min-h-[52px] w-full items-center justify-center rounded-2xl bg-paper/60 px-5 text-base font-medium text-ink ring-1 ring-black/10 transition-colors hover:bg-paper/80 disabled:opacity-60"
     >
       {children}
     </button>
