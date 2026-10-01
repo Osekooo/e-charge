@@ -38,6 +38,90 @@ export type Database = {
         }
         Relationships: []
       }
+      stations: {
+        Row: {
+          access_instructions: string
+          address: string
+          charging_price: string
+          compatibility: string[]
+          contact_for_pricing: boolean
+          county: string
+          created_at: string
+          description: string
+          email: string
+          id: string
+          is_open: boolean
+          latitude: number | null
+          longitude: number | null
+          name: string
+          opening_hours: Json
+          owner_id: string
+          phone: string
+          photo_paths: string[]
+          review_status: Database["public"]["Enums"]["review_status"]
+          services: string[]
+          station_type: Database["public"]["Enums"]["station_type"]
+          swap_price: string
+          town: string
+          updated_at: string
+          whatsapp: string
+        }
+        Insert: {
+          access_instructions?: string
+          address?: string
+          charging_price?: string
+          compatibility?: string[]
+          contact_for_pricing?: boolean
+          county?: string
+          created_at?: string
+          description?: string
+          email?: string
+          id?: string
+          is_open?: boolean
+          latitude?: number | null
+          longitude?: number | null
+          name: string
+          opening_hours?: Json
+          owner_id: string
+          phone?: string
+          photo_paths?: string[]
+          review_status?: Database["public"]["Enums"]["review_status"]
+          services?: string[]
+          station_type?: Database["public"]["Enums"]["station_type"]
+          swap_price?: string
+          town?: string
+          updated_at?: string
+          whatsapp?: string
+        }
+        Update: {
+          access_instructions?: string
+          address?: string
+          charging_price?: string
+          compatibility?: string[]
+          contact_for_pricing?: boolean
+          county?: string
+          created_at?: string
+          description?: string
+          email?: string
+          id?: string
+          is_open?: boolean
+          latitude?: number | null
+          longitude?: number | null
+          name?: string
+          opening_hours?: Json
+          owner_id?: string
+          phone?: string
+          photo_paths?: string[]
+          review_status?: Database["public"]["Enums"]["review_status"]
+          services?: string[]
+          station_type?: Database["public"]["Enums"]["station_type"]
+          swap_price?: string
+          town?: string
+          updated_at?: string
+          whatsapp?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           id: string
@@ -71,6 +155,8 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "owner"
+      review_status: "pending" | "approved" | "rejected" | "suspended"
+      station_type: "swap" | "charging" | "both"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -199,6 +285,8 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "owner"],
+      review_status: ["pending", "approved", "rejected", "suspended"],
+      station_type: ["swap", "charging", "both"],
     },
   },
 } as const
