@@ -7,7 +7,7 @@ import { reviewStatusLabels, type StationRow } from "@/lib/owner-stations";
 
 export const Route = createFileRoute("/_authenticated/owner/dashboard")({
   validateSearch: (s: Record<string, unknown>): { submitted?: string } =>
-    s.submitted ? { submitted: String(s.submitted) } : {},
+    s["submitted"] ? { submitted: String(s["submitted"]) } : {},
   head: () => ({
     meta: [
       { title: "Owner Dashboard — E-Charge" },
@@ -72,7 +72,7 @@ function OwnerDashboard() {
         <Panel title="Verified" description={`${count("approved")} approved`} />
       </div>
 
-      <Panel title={list.length ? "Manage stations" : "No stations yet"} description={list.length ? undefined : "Add your first station so riders can find it."}>
+      <Panel title={list.length ? "Manage stations" : "No stations yet"} description={list.length ? "" : "Add your first station so riders can find it."}>
         {stations.isLoading ? <p className="text-sm text-ink/60">Loading…</p> : null}
         {stations.error ? <Notice tone="warn">We couldn't load your stations. Please refresh.</Notice> : null}
         <div className="space-y-2">

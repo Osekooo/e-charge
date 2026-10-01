@@ -64,7 +64,7 @@ function NewStation() {
     whatsapp: "",
     email: "",
     description: "",
-    station_type: "both" as StationInsert["station_type"],
+    station_type: "both" as NonNullable<StationInsert["station_type"]>,
     swap_price: "",
     charging_price: "",
     contact_for_pricing: false,
