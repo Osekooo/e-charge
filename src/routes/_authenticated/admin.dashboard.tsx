@@ -54,7 +54,7 @@ function AdminDashboard() {
     },
   });
 
-  if (role.isLoading) return <PageShell eyebrow="Admin" title="Checking access…" />;
+  if (role.isLoading) return <PageShell eyebrow="Admin" title="Checking access…">{null}</PageShell>;
   if (!role.data)
     return (
       <PageShell eyebrow="Admin" title="Admins only.">
