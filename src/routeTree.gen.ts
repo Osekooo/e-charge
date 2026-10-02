@@ -15,11 +15,11 @@ import { Route as AboutRouteImport } from './routes/about'
 import { Route as ContactRouteImport } from './routes/contact'
 import { Route as FindStationRouteImport } from './routes/find-station'
 import { Route as RegisterStationRouteImport } from './routes/register-station'
-import { Route as AdminDashboardRouteImport } from './routes/admin.dashboard'
 import { Route as OwnerForgotPasswordRouteImport } from './routes/owner.forgot-password'
 import { Route as OwnerLoginRouteImport } from './routes/owner.login'
 import { Route as OwnerSignupRouteImport } from './routes/owner.signup'
 import { Route as StationsStationIdRouteImport } from './routes/stations.$stationId'
+import { Route as AuthenticatedAdminDashboardRouteImport } from './routes/_authenticated/admin.dashboard'
 import { Route as AuthenticatedOwnerDashboardRouteImport } from './routes/_authenticated/owner.dashboard'
 import { Route as AuthenticatedOwnerStationsNewRouteImport } from './routes/_authenticated/owner.stations.new'
 
@@ -52,11 +52,6 @@ const RegisterStationRoute = RegisterStationRouteImport.update({
   path: '/register-station',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AdminDashboardRoute = AdminDashboardRouteImport.update({
-  id: '/admin/dashboard',
-  path: '/admin/dashboard',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const OwnerForgotPasswordRoute = OwnerForgotPasswordRouteImport.update({
   id: '/owner/forgot-password',
   path: '/owner/forgot-password',
@@ -77,6 +72,12 @@ const StationsStationIdRoute = StationsStationIdRouteImport.update({
   path: '/stations/$stationId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthenticatedAdminDashboardRoute =
+  AuthenticatedAdminDashboardRouteImport.update({
+    id: '/admin/dashboard',
+    path: '/admin/dashboard',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedOwnerDashboardRoute =
   AuthenticatedOwnerDashboardRouteImport.update({
     id: '/owner/dashboard',
@@ -96,11 +97,11 @@ export interface FileRoutesByFullPath {
   '/contact': typeof ContactRoute
   '/find-station': typeof FindStationRoute
   '/register-station': typeof RegisterStationRoute
-  '/admin/dashboard': typeof AdminDashboardRoute
   '/owner/forgot-password': typeof OwnerForgotPasswordRoute
   '/owner/login': typeof OwnerLoginRoute
   '/owner/signup': typeof OwnerSignupRoute
   '/stations/$stationId': typeof StationsStationIdRoute
+  '/admin/dashboard': typeof AuthenticatedAdminDashboardRoute
   '/owner/dashboard': typeof AuthenticatedOwnerDashboardRoute
   '/owner/stations/new': typeof AuthenticatedOwnerStationsNewRoute
 }
@@ -110,11 +111,11 @@ export interface FileRoutesByTo {
   '/contact': typeof ContactRoute
   '/find-station': typeof FindStationRoute
   '/register-station': typeof RegisterStationRoute
-  '/admin/dashboard': typeof AdminDashboardRoute
   '/owner/forgot-password': typeof OwnerForgotPasswordRoute
   '/owner/login': typeof OwnerLoginRoute
   '/owner/signup': typeof OwnerSignupRoute
   '/stations/$stationId': typeof StationsStationIdRoute
+  '/admin/dashboard': typeof AuthenticatedAdminDashboardRoute
   '/owner/dashboard': typeof AuthenticatedOwnerDashboardRoute
   '/owner/stations/new': typeof AuthenticatedOwnerStationsNewRoute
 }
@@ -126,11 +127,11 @@ export interface FileRoutesById {
   '/contact': typeof ContactRoute
   '/find-station': typeof FindStationRoute
   '/register-station': typeof RegisterStationRoute
-  '/admin/dashboard': typeof AdminDashboardRoute
   '/owner/forgot-password': typeof OwnerForgotPasswordRoute
   '/owner/login': typeof OwnerLoginRoute
   '/owner/signup': typeof OwnerSignupRoute
   '/stations/$stationId': typeof StationsStationIdRoute
+  '/_authenticated/admin/dashboard': typeof AuthenticatedAdminDashboardRoute
   '/_authenticated/owner/dashboard': typeof AuthenticatedOwnerDashboardRoute
   '/_authenticated/owner/stations/new': typeof AuthenticatedOwnerStationsNewRoute
 }
@@ -142,11 +143,11 @@ export interface FileRouteTypes {
     | '/contact'
     | '/find-station'
     | '/register-station'
-    | '/admin/dashboard'
     | '/owner/forgot-password'
     | '/owner/login'
     | '/owner/signup'
     | '/stations/$stationId'
+    | '/admin/dashboard'
     | '/owner/dashboard'
     | '/owner/stations/new'
   fileRoutesByTo: FileRoutesByTo
@@ -156,11 +157,11 @@ export interface FileRouteTypes {
     | '/contact'
     | '/find-station'
     | '/register-station'
-    | '/admin/dashboard'
     | '/owner/forgot-password'
     | '/owner/login'
     | '/owner/signup'
     | '/stations/$stationId'
+    | '/admin/dashboard'
     | '/owner/dashboard'
     | '/owner/stations/new'
   id:
@@ -171,11 +172,11 @@ export interface FileRouteTypes {
     | '/contact'
     | '/find-station'
     | '/register-station'
-    | '/admin/dashboard'
     | '/owner/forgot-password'
     | '/owner/login'
     | '/owner/signup'
     | '/stations/$stationId'
+    | '/_authenticated/admin/dashboard'
     | '/_authenticated/owner/dashboard'
     | '/_authenticated/owner/stations/new'
   fileRoutesById: FileRoutesById
@@ -187,7 +188,6 @@ export interface RootRouteChildren {
   ContactRoute: typeof ContactRoute
   FindStationRoute: typeof FindStationRoute
   RegisterStationRoute: typeof RegisterStationRoute
-  AdminDashboardRoute: typeof AdminDashboardRoute
   OwnerForgotPasswordRoute: typeof OwnerForgotPasswordRoute
   OwnerLoginRoute: typeof OwnerLoginRoute
   OwnerSignupRoute: typeof OwnerSignupRoute
@@ -238,13 +238,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RegisterStationRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin/dashboard': {
-      id: '/admin/dashboard'
-      path: '/admin/dashboard'
-      fullPath: '/admin/dashboard'
-      preLoaderRoute: typeof AdminDashboardRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/owner/forgot-password': {
       id: '/owner/forgot-password'
       path: '/owner/forgot-password'
@@ -273,6 +266,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof StationsStationIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authenticated/admin/dashboard': {
+      id: '/_authenticated/admin/dashboard'
+      path: '/admin/dashboard'
+      fullPath: '/admin/dashboard'
+      preLoaderRoute: typeof AuthenticatedAdminDashboardRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/owner/dashboard': {
       id: '/_authenticated/owner/dashboard'
       path: '/owner/dashboard'
@@ -291,11 +291,13 @@ declare module '@tanstack/react-router' {
 }
 
 interface AuthenticatedRouteRouteChildren {
+  AuthenticatedAdminDashboardRoute: typeof AuthenticatedAdminDashboardRoute
   AuthenticatedOwnerDashboardRoute: typeof AuthenticatedOwnerDashboardRoute
   AuthenticatedOwnerStationsNewRoute: typeof AuthenticatedOwnerStationsNewRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
+  AuthenticatedAdminDashboardRoute: AuthenticatedAdminDashboardRoute,
   AuthenticatedOwnerDashboardRoute: AuthenticatedOwnerDashboardRoute,
   AuthenticatedOwnerStationsNewRoute: AuthenticatedOwnerStationsNewRoute,
 }
@@ -310,7 +312,6 @@ const rootRouteChildren: RootRouteChildren = {
   ContactRoute: ContactRoute,
   FindStationRoute: FindStationRoute,
   RegisterStationRoute: RegisterStationRoute,
-  AdminDashboardRoute: AdminDashboardRoute,
   OwnerForgotPasswordRoute: OwnerForgotPasswordRoute,
   OwnerLoginRoute: OwnerLoginRoute,
   OwnerSignupRoute: OwnerSignupRoute,
