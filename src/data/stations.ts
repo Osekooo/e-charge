@@ -24,7 +24,9 @@ export type Station = {
   phone: string;
   whatsapp: string;
   description: string;
-  mapPosition: { left: string; top: string };
+  mapPosition?: { left: string; top: string };
+  latitude?: number | null;
+  longitude?: number | null;
 };
 
 /**
