@@ -55,7 +55,8 @@
   --color-sidebar-primary: var(--sidebar-primary);
   --color-sidebar-primary-foreground: var(--ink);
   --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--paper);
+  --color-sidebar-border: var(--border);
   --color-sidebar-ring: var(--signal);
 }
 
@@ -95,6 +96,7 @@
   --sidebar-primary: var(--signal);
   --sidebar-primary-foreground: var(--ink);
   --sidebar-accent: oklch(0.31 0.0195 226);
+  --sidebar-accent-foreground: var(--paper);
   --sidebar-border: oklch(1 0 0 / 12%);
   --sidebar-ring: var(--signal);
 }
@@ -119,26 +121,10 @@
 
 @utility map-surface {
   background:
-    linear-gradient(
-      color-mix(in oklab, var(--paper) 10%, transparent),
-      color-mix(in oklab, var(--paper) 10%, transparent)
-    ),
-    repeating-linear-gradient(
-      0deg,
-      color-mix(in oklab, var(--frost) 10%, transparent) 0 1px,
-      transparent 1px 30px
-    ),
-    repeating-linear-gradient(
-      90deg,
-      color-mix(in oklab, var(--frost) 10%, transparent) 0 1px,
-      transparent 1px 30px
-    ),
-    linear-gradient(
-      160deg,
-      oklch(0.27 0.026 220) 0%,
-      oklch(0.35 0.034 205) 55%,
-      oklch(0.19 0.017 228) 100%
-    );
+    linear-gradient(color-mix(in oklab, var(--paper) 10%, transparent), color-mix(in oklab, var(--paper) 10%, transparent)),
+    repeating-linear-gradient(0deg, color-mix(in oklab, var(--frost) 10%, transparent) 0 1px, transparent 1px 30px),
+    repeating-linear-gradient(90deg, color-mix(in oklab, var(--frost) 10%, transparent) 0 1px, transparent 1px 30px),
+    linear-gradient(160deg, oklch(0.27 0.026 220) 0%, oklch(0.35 0.034 205) 55%, oklch(0.19 0.017 228) 100%);
 }
 
 @utility map-roads {
@@ -178,11 +164,9 @@
   0% {
     box-shadow: 0 0 0 0 color-mix(in oklab, var(--signal) 55%, transparent);
   }
-
   70% {
     box-shadow: 0 0 0 16px color-mix(in oklab, var(--signal) 0%, transparent);
   }
-
   100% {
     box-shadow: 0 0 0 0 color-mix(in oklab, var(--signal) 0%, transparent);
   }
@@ -193,7 +177,6 @@
     transform: translateY(10px);
     opacity: 0;
   }
-
   to {
     transform: translateY(0);
     opacity: 1;
