@@ -1,15 +1,19 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
-import { MapMarker, MapSurface } from "@/components/map-surface";
+import { useEffect, useState } from "react";
+import { LeafletMap } from "@/components/leaflet-map";
+import { getPublicStation } from "@/lib/public-stations.functions";
+import { fmtKm, fmtMin, toStation, type LatLng } from "@/lib/station-adapter";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
 import { GhostButton, Notice, PrimaryButton, Select, TextArea } from "@/components/form-controls";
-import { findStation, stationTypeLabels, statusLabels } from "@/data/stations";
+import { stationTypeLabels, statusLabels } from "@/data/stations";
 
 export const Route = createFileRoute("/stations/$stationId")({
-  loader: ({ params }) => {
-    const station = findStation(params.stationId);
-    if (!station) throw notFound();
-    return { station };
+  loader: async ({ params }) => {
+    if (!/^[0-9a-f-]{36}$/i.test(params.stationId)) throw notFound();
+    const row = await getPublicStation({ data: { id: params.stationId } });
+    if (!row) throw notFound();
+    return { row, station: toStation(row, null) };
   },
   head: ({ loaderData }) => {
     if (!loaderData) {
@@ -48,7 +52,15 @@ const reportReasons = [
 ];
 
 function StationProfile() {
-  const { station } = Route.useLoaderData();
+  const { row } = Route.useLoaderData();
+  const [rider, setRider] = useState<LatLng | null>(null);
+  useEffect(() => {
+    navigator.geolocation?.getCurrentPosition(
+      (p) => setRider({ lat: p.coords.latitude, lng: p.coords.longitude }),
+      () => {},
+    );
+  }, []);
+  const station = toStation(row, rider);
 
   return (
     <div className="flex min-h-screen flex-col bg-ink">
@@ -59,14 +71,17 @@ function StationProfile() {
         </div>
       </div>
 
-      <MapSurface className="h-[240px]">
-        <MapMarker
-          left={station.mapPosition.left}
-          top={station.mapPosition.top}
-          tone="signal"
-          label={`${station.distanceKm} km · ${station.etaMin} min`}
+      {station.latitude != null && station.longitude != null ? (
+        <LeafletMap
+          className="h-[240px]"
+          center={{ lat: station.latitude, lng: station.longitude }}
+          zoom={15}
+          rider={rider}
+          pins={[{ id: station.id, lat: station.latitude, lng: station.longitude, tone: "signal", label: station.name }]}
         />
-      </MapSurface>
+      ) : (
+        <div className="h-[120px] map-surface" />
+      )}
 
       <main className="sheet-in -mt-6 flex-1 rounded-t-[24px] frost px-5 pt-6 pb-16 ring-1 ring-black/5 sm:px-8">
         <div className="mx-auto max-w-2xl">
@@ -105,8 +120,8 @@ function StationProfile() {
           </p>
 
           <div className="mt-5 grid gap-3 sm:grid-cols-3">
-            <Stat label="Road distance" value={`${station.distanceKm} km`} />
-            <Stat label="Travel time" value={`${station.etaMin} min`} />
+            <Stat label="Distance (approx.)" value={fmtKm(station.distanceKm)} />
+            <Stat label="Travel time" value={fmtMin(station.etaMin)} />
             <Stat
               label="Availability"
               value={station.availabilityLabel}

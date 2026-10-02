@@ -95,6 +95,7 @@ function FindStation() {
       <LeafletMap
         className="h-[300px] sm:h-[340px]"
         rider={rider}
+        onPick={locationState === "granted" ? (p) => setRider(p) : undefined}
         pins={results
           .filter((st) => st.latitude != null && st.longitude != null)
           .map((st) => ({
@@ -160,8 +161,8 @@ function FindStation() {
             <div className="flex items-center gap-2 rounded-2xl bg-signal/12 px-4 py-3 ring-1 ring-signal/30">
               <span className="size-3 shrink-0 rounded-full bg-signal" />
               <p className="text-sm leading-snug text-pretty text-ink/80">
-                Using your location. Showing stations within{" "}
-                <strong className="font-semibold">{radiusKm} km</strong>, nearest travel time first.
+                {rider ? "Using your location (tap the map to move it)." : "Tap the map to set your starting point."} Showing stations within{" "}
+                <strong className="font-semibold">{radiusKm} km</strong>, nearest first.
               </p>
             </div>
           ) : null}
