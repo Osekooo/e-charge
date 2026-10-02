@@ -8,3 +8,4 @@
 > Commits you push to the connected branch sync back to Lovable and show up in
 > the editor, so keep the branch in a working state.
 <!-- LOVABLE:END -->
+- Maps use Leaflet + OpenStreetMap via src/components/leaflet-map.tsx (browser-only dynamic import); free, no API key. Public station reads go through src/lib/public-stations.functions.ts (publishable client, approved only).

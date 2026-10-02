@@ -6,6 +6,7 @@ import {
   type StationStatus,
 } from "@/data/stations";
 import { cn } from "@/lib/utils";
+import { fmtKm, fmtMin } from "@/lib/station-adapter";
 
 const statusStyles: Record<StationStatus, string> = {
   open: "bg-signal/15 text-signal ring-signal/30",
@@ -41,7 +42,7 @@ export function StationCard({ station }: { station: Station }) {
             {station.name}
           </h3>
           <p className={cn("mt-0.5 text-sm", dimmed ? "text-ink/50" : "text-ink/60")}>
-            {station.area} · {station.distanceKm} km · ETA {station.etaMin} min
+            {station.area}{Number.isFinite(station.distanceKm) ? ` · ${fmtKm(station.distanceKm)} · ETA ${fmtMin(station.etaMin)}` : ""}
           </p>
         </div>
         <div
