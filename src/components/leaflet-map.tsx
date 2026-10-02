@@ -93,7 +93,7 @@ export function LeafletMap({
         radius: 8,
         color: "#fff",
         weight: 3,
-        fillColor: "var(--signal)",
+        fillColor: cssVar("--signal"),
         fillOpacity: 1,
       }).addTo(layer.current);
       bounds.push([rider.lat, rider.lng]);
@@ -103,7 +103,7 @@ export function LeafletMap({
         radius: 10,
         color: "#fff",
         weight: 3,
-        fillColor: "var(--amber)",
+        fillColor: cssVar("--amber"),
         fillOpacity: 1,
       }).addTo(layer.current);
     }
@@ -124,4 +124,8 @@ export function LeafletMap({
 
 function escapeHtml(s: string) {
   return s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+}
+
+function cssVar(name: string) {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || "#14b8a6";
 }
