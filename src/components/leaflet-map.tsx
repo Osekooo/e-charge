@@ -9,7 +9,7 @@ export type MapPin = {
   lng: number;
   label: string;
   tone: "signal" | "amber" | "danger";
-  onClick?: () => void;
+  onClick?: (() => void) | undefined;
 };
 
 const NAIROBI = { lat: -1.2864, lng: 36.8172 };
@@ -34,7 +34,7 @@ export function LeafletMap({
   center?: { lat: number; lng: number } | null;
   zoom?: number;
   /** When set, tapping the map picks a location (owner station picker). */
-  onPick?: (p: { lat: number; lng: number }) => void;
+  onPick?: ((p: { lat: number; lng: number }) => void) | undefined;
   picked?: { lat: number; lng: number } | null;
 }) {
   const el = useRef<HTMLDivElement>(null);
