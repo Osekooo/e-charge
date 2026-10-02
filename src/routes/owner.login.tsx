@@ -3,7 +3,6 @@ import { useState } from "react";
 import { AuthShell } from "@/components/auth-shell";
 import { Field, GhostButton, Notice, PrimaryButton, TextInput } from "@/components/form-controls";
 import { supabase } from "@/integrations/supabase/client";
-import { lovable } from "@/integrations/lovable";
 
 export const Route = createFileRoute("/owner/login")({
   head: () => ({
@@ -46,15 +45,15 @@ function OwnerLogin() {
   async function handleGoogleLogin() {
     setError(null);
     localStorage.setItem("echarge_post_auth_redirect", "/owner/dashboard");
-    const result = await lovable.auth.signInWithOAuth("google", {
-      redirect_uri: window.location.origin,
+    const { error: oauthError } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: `${window.location.origin}/owner/dashboard`,
+      },
     });
-    if (result.error) {
-      setError(result.error.message ?? "Google sign-in failed. Please try again.");
-      return;
+    if (oauthError) {
+      setError(oauthError.message ?? "Google sign-in failed. Please try again.");
     }
-    if (result.redirected) return;
-    navigate({ to: "/owner/dashboard" });
   }
 
   return (
