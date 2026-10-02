@@ -1,9 +1,12 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { SiteHeader } from "@/components/site-header";
-import { MapMarker, MapSurface } from "@/components/map-surface";
+import { LeafletMap } from "@/components/leaflet-map";
+import { getApprovedStations } from "@/lib/public-stations.functions";
+import { toStation, type LatLng } from "@/lib/station-adapter";
 import { StationCard } from "@/components/station-card";
-import { demoStations, type Station } from "@/data/stations";
+import type { Station } from "@/data/stations";
 
 export const Route = createFileRoute("/find-station")({
   head: () => ({
@@ -35,13 +38,19 @@ const markerTone = (station: Station) =>
       : "amber";
 
 const markerLabel = (station: Station) =>
-  `${station.type === "both" ? "Both" : station.type === "swap" ? "Swap" : "Charging"} · ${station.distanceKm}km`;
+  `${station.type === "both" ? "Both" : station.type === "swap" ? "Swap" : "Charging"}${Number.isFinite(station.distanceKm) ? ` · ${station.distanceKm}km` : ""}`;
 
 function FindStation() {
   const [locationState, setLocationState] = useState<LocationState>("prompt");
   const [query, setQuery] = useState("");
   const [battery, setBattery] = useState("");
-  const [radiusKm, setRadiusKm] = useState(5);
+  const [radiusKm, setRadiusKm] = useState(10);
+  const [rider, setRider] = useState<LatLng | null>(null);
+  const navigate = useNavigate();
+  const { data: rows = [], isLoading, isError } = useQuery({
+    queryKey: ["approved-stations"],
+    queryFn: () => getApprovedStations(),
+  });
 
   const requestLocation = () => {
     if (typeof navigator === "undefined" || !navigator.geolocation) {
@@ -49,15 +58,20 @@ function FindStation() {
       return;
     }
     navigator.geolocation.getCurrentPosition(
-      () => setLocationState("granted"),
+      (pos) => {
+        setRider({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        setLocationState("granted");
+      },
       () => setLocationState("denied"),
+      { enableHighAccuracy: true, timeout: 15000 },
     );
   };
 
   const results = useMemo(() => {
     const term = query.trim().toLowerCase();
-    return demoStations
-      .filter((station) => station.distanceKm <= radiusKm)
+    return rows
+      .map((row) => toStation(row, rider))
+      .filter((station) => !rider || !Number.isFinite(station.distanceKm) || station.distanceKm <= radiusKm)
       .filter((station) =>
         term.length === 0
           ? true
@@ -66,8 +80,8 @@ function FindStation() {
               .toLowerCase()
               .includes(term),
       )
-      .sort((a, b) => a.etaMin - b.etaMin);
-  }, [query, radiusKm]);
+      .sort((a, b) => (a.distanceKm || 1e9) - (b.distanceKm || 1e9));
+  }, [rows, rider, query, radiusKm]);
 
   return (
     <div className="flex min-h-screen flex-col bg-ink">
@@ -78,17 +92,20 @@ function FindStation() {
         </div>
       </div>
 
-      <MapSurface className="h-[300px] sm:h-[340px]" showRider={locationState === "granted"}>
-        {results.map((station) => (
-          <MapMarker
-            key={station.id}
-            left={station.mapPosition.left}
-            top={station.mapPosition.top}
-            tone={markerTone(station)}
-            label={markerLabel(station)}
-          />
-        ))}
-      </MapSurface>
+      <LeafletMap
+        className="h-[300px] sm:h-[340px]"
+        rider={rider}
+        pins={results
+          .filter((st) => st.latitude != null && st.longitude != null)
+          .map((st) => ({
+            id: st.id,
+            lat: st.latitude!,
+            lng: st.longitude!,
+            tone: markerTone(st),
+            label: `${st.name} · ${markerLabel(st)}`,
+            onClick: () => navigate({ to: "/stations/$stationId", params: { stationId: st.id } }),
+          }))}
+      />
 
       <div className="sheet-in -mt-6 flex-1 rounded-t-[24px] frost px-5 pt-3 pb-16 ring-1 ring-black/5 sm:px-8">
         <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-ink/20" />
@@ -130,7 +147,7 @@ function FindStation() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setLocationState("granted")}
+                  onClick={() => { setRider(null); setLocationState("granted"); }}
                   className="flex min-h-[48px] flex-1 items-center justify-center rounded-xl bg-paper/70 text-sm font-medium text-ink ring-1 ring-black/10 transition-colors hover:bg-paper"
                 >
                   CHOOSE LOCATION ON MAP
@@ -179,12 +196,16 @@ function FindStation() {
           <div className="mt-5 flex items-baseline justify-between">
             <h2 className="font-display text-lg font-semibold text-ink">Nearby stations</h2>
             <span className="text-xs text-neutral">
-              {results.length} within {radiusKm} km
+              {rider ? `${results.length} within ${radiusKm} km` : `${results.length} stations`}
             </span>
           </div>
 
           <div className="mt-3 space-y-3">
-            {results.length > 0 ? (
+            {isLoading ? (
+              <p className="py-6 text-center text-sm text-ink/60">Loading stations…</p>
+            ) : isError ? (
+              <p className="py-6 text-center text-sm text-danger">Could not load stations. Check your connection and try again.</p>
+            ) : results.length > 0 ? (
               results.map((station) => <StationCard key={station.id} station={station} />)
             ) : (
               <div className="rounded-[18px] bg-paper/70 p-5 text-center ring-1 ring-black/5">
@@ -218,8 +239,8 @@ function FindStation() {
           </div>
 
           <p className="mt-6 text-center text-xs text-neutral">
-            Demo stations shown for now. Real road distance and ETA arrive with routing in a later
-            stage.{" "}
+            Only E-Charge verified stations are shown. Distances are straight-line estimates for
+            now; road distance arrives with in-app navigation.{" "}
             <Link to="/register-station" className="underline underline-offset-2">
               Own a station?
             </Link>
