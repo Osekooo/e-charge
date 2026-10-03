@@ -46,6 +46,7 @@ function FindStation() {
   const [battery, setBattery] = useState("");
   const [radiusKm, setRadiusKm] = useState(10);
   const [rider, setRider] = useState<LatLng | null>(null);
+  const [recenterTick, setRecenterTick] = useState(0);
   const navigate = useNavigate();
   const { data: rows = [], isLoading, isError } = useQuery({
     queryKey: ["approved-stations"],
@@ -65,6 +66,37 @@ function FindStation() {
       () => setLocationState("denied"),
       { enableHighAccuracy: true, timeout: 15000 },
     );
+  };
+
+  // Look up a place in Kenya (OpenStreetMap Nominatim — free, no API key) so
+  // riders can check stations where they are heading, not just where they are.
+  const [placeBusy, setPlaceBusy] = useState(false);
+  const [placeError, setPlaceError] = useState<string | null>(null);
+  const searchPlace = async () => {
+    const term = query.trim();
+    if (!term) return;
+    setPlaceBusy(true);
+    setPlaceError(null);
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=ke&q=${encodeURIComponent(term)}`,
+        { headers: { Accept: "application/json" } },
+      );
+      const hits = (await res.json()) as { lat: string; lon: string; display_name: string }[];
+      const hit = hits[0];
+      if (!hit) {
+        setPlaceError(`Couldn't find "${term}" in Kenya. Try a nearby town or landmark.`);
+        return;
+      }
+      setRider({ lat: Number(hit.lat), lng: Number(hit.lon) });
+      setLocationState("granted");
+      setQuery("");
+      setRadiusKm(10);
+    } catch {
+      setPlaceError("Place search failed. Check your connection and try again.");
+    } finally {
+      setPlaceBusy(false);
+    }
   };
 
   const results = useMemo(() => {
@@ -92,21 +124,36 @@ function FindStation() {
         </div>
       </div>
 
-      <LeafletMap
-        className="h-[300px] sm:h-[340px]"
-        rider={rider}
-        onPick={locationState === "granted" ? (p) => setRider(p) : undefined}
-        pins={results
-          .filter((st) => st.latitude != null && st.longitude != null)
-          .map((st) => ({
-            id: st.id,
-            lat: st.latitude!,
-            lng: st.longitude!,
-            tone: markerTone(st),
-            label: `${st.name} · ${markerLabel(st)}`,
-            onClick: () => navigate({ to: "/stations/$stationId", params: { stationId: st.id } }),
-          }))}
-      />
+      <div className="relative">
+        <LeafletMap
+          className="h-[300px] sm:h-[340px]"
+          rider={rider}
+          center={rider}
+          recenterSignal={recenterTick}
+          onPick={locationState === "granted" ? (p) => setRider(p) : undefined}
+          pins={results
+            .filter((st) => st.latitude != null && st.longitude != null)
+            .map((st) => ({
+              id: st.id,
+              lat: st.latitude!,
+              lng: st.longitude!,
+              tone: markerTone(st),
+              label: `${st.name} · ${markerLabel(st)}`,
+              onClick: () => navigate({ to: "/stations/$stationId", params: { stationId: st.id } }),
+            }))}
+        />
+        {rider ? (
+          <button
+            type="button"
+            onClick={() => setRecenterTick((t) => t + 1)}
+            aria-label="Re-center map on my location"
+            className="absolute bottom-4 right-3 z-[500] flex min-h-[48px] items-center gap-2 rounded-xl bg-paper px-4 text-sm font-semibold text-ink shadow-lg ring-1 ring-black/10 transition-colors hover:bg-paper/90"
+          >
+            <span className="size-2.5 rounded-full bg-signal" />
+            RE-CENTER
+          </button>
+        ) : null}
+      </div>
 
       <div className="sheet-in -mt-6 flex-1 rounded-t-[24px] frost px-5 pt-3 pb-16 ring-1 ring-black/5 sm:px-8">
         <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-ink/20" />
@@ -172,10 +219,33 @@ function FindStation() {
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  searchPlace();
+                }
+              }}
               className="w-full bg-transparent text-base text-ink placeholder:text-neutral focus:outline-none"
               placeholder="Search station, area, town or county"
             />
           </div>
+
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={searchPlace}
+              disabled={placeBusy || !query.trim()}
+              className="min-h-[44px] rounded-xl bg-ink px-4 text-sm font-semibold text-paper transition-colors hover:bg-ink/90 disabled:opacity-50"
+            >
+              {placeBusy ? "SEARCHING…" : "SEARCH THIS PLACE ON THE MAP"}
+            </button>
+            <span className="text-xs text-neutral">
+              Heading somewhere? Search a town or area to see stations there.
+            </span>
+          </div>
+          {placeError ? (
+            <p className="mt-2 rounded-xl bg-amber/12 px-3 py-2 text-sm text-ink ring-1 ring-amber/30">{placeError}</p>
+          ) : null}
 
           <div className="mt-3 flex flex-wrap items-center gap-3">
             <label className="flex items-center gap-2 rounded-xl bg-paper/60 px-3 py-2 ring-1 ring-black/5">
