@@ -15,6 +15,7 @@ import { Route as AboutRouteImport } from './routes/about'
 import { Route as ContactRouteImport } from './routes/contact'
 import { Route as FindStationRouteImport } from './routes/find-station'
 import { Route as RegisterStationRouteImport } from './routes/register-station'
+import { Route as NavigateStationIdRouteImport } from './routes/navigate.$stationId'
 import { Route as OwnerForgotPasswordRouteImport } from './routes/owner.forgot-password'
 import { Route as OwnerLoginRouteImport } from './routes/owner.login'
 import { Route as OwnerSignupRouteImport } from './routes/owner.signup'
@@ -50,6 +51,11 @@ const FindStationRoute = FindStationRouteImport.update({
 const RegisterStationRoute = RegisterStationRouteImport.update({
   id: '/register-station',
   path: '/register-station',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const NavigateStationIdRoute = NavigateStationIdRouteImport.update({
+  id: '/navigate/$stationId',
+  path: '/navigate/$stationId',
   getParentRoute: () => rootRouteImport,
 } as any)
 const OwnerForgotPasswordRoute = OwnerForgotPasswordRouteImport.update({
@@ -97,6 +103,7 @@ export interface FileRoutesByFullPath {
   '/contact': typeof ContactRoute
   '/find-station': typeof FindStationRoute
   '/register-station': typeof RegisterStationRoute
+  '/navigate/$stationId': typeof NavigateStationIdRoute
   '/owner/forgot-password': typeof OwnerForgotPasswordRoute
   '/owner/login': typeof OwnerLoginRoute
   '/owner/signup': typeof OwnerSignupRoute
@@ -111,6 +118,7 @@ export interface FileRoutesByTo {
   '/contact': typeof ContactRoute
   '/find-station': typeof FindStationRoute
   '/register-station': typeof RegisterStationRoute
+  '/navigate/$stationId': typeof NavigateStationIdRoute
   '/owner/forgot-password': typeof OwnerForgotPasswordRoute
   '/owner/login': typeof OwnerLoginRoute
   '/owner/signup': typeof OwnerSignupRoute
@@ -127,6 +135,7 @@ export interface FileRoutesById {
   '/contact': typeof ContactRoute
   '/find-station': typeof FindStationRoute
   '/register-station': typeof RegisterStationRoute
+  '/navigate/$stationId': typeof NavigateStationIdRoute
   '/owner/forgot-password': typeof OwnerForgotPasswordRoute
   '/owner/login': typeof OwnerLoginRoute
   '/owner/signup': typeof OwnerSignupRoute
@@ -143,6 +152,7 @@ export interface FileRouteTypes {
     | '/contact'
     | '/find-station'
     | '/register-station'
+    | '/navigate/$stationId'
     | '/owner/forgot-password'
     | '/owner/login'
     | '/owner/signup'
@@ -157,6 +167,7 @@ export interface FileRouteTypes {
     | '/contact'
     | '/find-station'
     | '/register-station'
+    | '/navigate/$stationId'
     | '/owner/forgot-password'
     | '/owner/login'
     | '/owner/signup'
@@ -172,6 +183,7 @@ export interface FileRouteTypes {
     | '/contact'
     | '/find-station'
     | '/register-station'
+    | '/navigate/$stationId'
     | '/owner/forgot-password'
     | '/owner/login'
     | '/owner/signup'
@@ -188,6 +200,7 @@ export interface RootRouteChildren {
   ContactRoute: typeof ContactRoute
   FindStationRoute: typeof FindStationRoute
   RegisterStationRoute: typeof RegisterStationRoute
+  NavigateStationIdRoute: typeof NavigateStationIdRoute
   OwnerForgotPasswordRoute: typeof OwnerForgotPasswordRoute
   OwnerLoginRoute: typeof OwnerLoginRoute
   OwnerSignupRoute: typeof OwnerSignupRoute
@@ -236,6 +249,13 @@ declare module '@tanstack/react-router' {
       path: '/register-station'
       fullPath: '/register-station'
       preLoaderRoute: typeof RegisterStationRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/navigate/$stationId': {
+      id: '/navigate/$stationId'
+      path: '/navigate/$stationId'
+      fullPath: '/navigate/$stationId'
+      preLoaderRoute: typeof NavigateStationIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/owner/forgot-password': {
@@ -312,6 +332,7 @@ const rootRouteChildren: RootRouteChildren = {
   ContactRoute: ContactRoute,
   FindStationRoute: FindStationRoute,
   RegisterStationRoute: RegisterStationRoute,
+  NavigateStationIdRoute: NavigateStationIdRoute,
   OwnerForgotPasswordRoute: OwnerForgotPasswordRoute,
   OwnerLoginRoute: OwnerLoginRoute,
   OwnerSignupRoute: OwnerSignupRoute,
