@@ -27,6 +27,7 @@ export function LeafletMap({
   zoom = 13,
   onPick,
   picked,
+  recenterSignal = 0,
 }: {
   className?: string;
   pins?: MapPin[];
@@ -36,6 +37,8 @@ export function LeafletMap({
   /** When set, tapping the map picks a location (owner station picker). */
   onPick?: ((p: { lat: number; lng: number }) => void) | undefined;
   picked?: { lat: number; lng: number } | null;
+  /** Bump this number to snap the view back to center/rider (GPS re-center button). */
+  recenterSignal?: number;
 }) {
   const el = useRef<HTMLDivElement>(null);
   const map = useRef<L.Map | null>(null);
@@ -117,7 +120,7 @@ export function LeafletMap({
     draw();
     if (center && map.current) map.current.setView([center.lat, center.lng], map.current.getZoom());
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pins, rider?.lat, rider?.lng, picked?.lat, picked?.lng, center?.lat, center?.lng]);
+  }, [pins, rider?.lat, rider?.lng, picked?.lat, picked?.lng, center?.lat, center?.lng, recenterSignal]);
 
   return <div ref={el} className={cn("relative z-0 bg-secondary", className)} />;
 }
