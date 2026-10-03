@@ -46,6 +46,7 @@ function FindStation() {
   const [battery, setBattery] = useState("");
   const [radiusKm, setRadiusKm] = useState(10);
   const [rider, setRider] = useState<LatLng | null>(null);
+  const [recenterTick, setRecenterTick] = useState(0);
   const navigate = useNavigate();
   const { data: rows = [], isLoading, isError } = useQuery({
     queryKey: ["approved-stations"],
@@ -122,22 +123,36 @@ function FindStation() {
         </div>
       </div>
 
-      <LeafletMap
-        className="h-[300px] sm:h-[340px]"
-        rider={rider}
-        center={rider}
-        onPick={locationState === "granted" ? (p) => setRider(p) : undefined}
-        pins={results
-          .filter((st) => st.latitude != null && st.longitude != null)
-          .map((st) => ({
-            id: st.id,
-            lat: st.latitude!,
-            lng: st.longitude!,
-            tone: markerTone(st),
-            label: `${st.name} · ${markerLabel(st)}`,
-            onClick: () => navigate({ to: "/stations/$stationId", params: { stationId: st.id } }),
-          }))}
-      />
+      <div className="relative">
+        <LeafletMap
+          className="h-[300px] sm:h-[340px]"
+          rider={rider}
+          center={rider}
+          recenterSignal={recenterTick}
+          onPick={locationState === "granted" ? (p) => setRider(p) : undefined}
+          pins={results
+            .filter((st) => st.latitude != null && st.longitude != null)
+            .map((st) => ({
+              id: st.id,
+              lat: st.latitude!,
+              lng: st.longitude!,
+              tone: markerTone(st),
+              label: `${st.name} · ${markerLabel(st)}`,
+              onClick: () => navigate({ to: "/stations/$stationId", params: { stationId: st.id } }),
+            }))}
+        />
+        {rider ? (
+          <button
+            type="button"
+            onClick={() => setRecenterTick((t) => t + 1)}
+            aria-label="Re-center map on my location"
+            className="absolute bottom-4 right-3 z-[500] flex min-h-[48px] items-center gap-2 rounded-xl bg-paper px-4 text-sm font-semibold text-ink shadow-lg ring-1 ring-black/10 transition-colors hover:bg-paper/90"
+          >
+            <span className="size-2.5 rounded-full bg-signal" />
+            RE-CENTER
+          </button>
+        ) : null}
+      </div>
 
       <div className="sheet-in -mt-6 flex-1 rounded-t-[24px] frost px-5 pt-3 pb-16 ring-1 ring-black/5 sm:px-8">
         <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-ink/20" />
