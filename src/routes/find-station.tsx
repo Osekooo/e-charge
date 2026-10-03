@@ -67,6 +67,36 @@ function FindStation() {
     );
   };
 
+  // Look up a place in Kenya (OpenStreetMap Nominatim — free, no API key) so
+  // riders can check stations where they are heading, not just where they are.
+  const [placeBusy, setPlaceBusy] = useState(false);
+  const [placeError, setPlaceError] = useState<string | null>(null);
+  const searchPlace = async () => {
+    const term = query.trim();
+    if (!term) return;
+    setPlaceBusy(true);
+    setPlaceError(null);
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=ke&q=${encodeURIComponent(term)}`,
+        { headers: { Accept: "application/json" } },
+      );
+      const hits = (await res.json()) as { lat: string; lon: string; display_name: string }[];
+      if (!hits.length) {
+        setPlaceError(`Couldn't find "${term}" in Kenya. Try a nearby town or landmark.`);
+        return;
+      }
+      setRider({ lat: Number(hits[0].lat), lng: Number(hits[0].lon) });
+      setLocationState("granted");
+      setQuery("");
+      setRadiusKm(10);
+    } catch {
+      setPlaceError("Place search failed. Check your connection and try again.");
+    } finally {
+      setPlaceBusy(false);
+    }
+  };
+
   const results = useMemo(() => {
     const term = query.trim().toLowerCase();
     return rows
