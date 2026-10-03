@@ -125,6 +125,7 @@ function FindStation() {
       <LeafletMap
         className="h-[300px] sm:h-[340px]"
         rider={rider}
+        center={rider}
         onPick={locationState === "granted" ? (p) => setRider(p) : undefined}
         pins={results
           .filter((st) => st.latitude != null && st.longitude != null)
@@ -202,10 +203,33 @@ function FindStation() {
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  searchPlace();
+                }
+              }}
               className="w-full bg-transparent text-base text-ink placeholder:text-neutral focus:outline-none"
               placeholder="Search station, area, town or county"
             />
           </div>
+
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={searchPlace}
+              disabled={placeBusy || !query.trim()}
+              className="min-h-[44px] rounded-xl bg-ink px-4 text-sm font-semibold text-paper transition-colors hover:bg-ink/90 disabled:opacity-50"
+            >
+              {placeBusy ? "SEARCHING…" : "SEARCH THIS PLACE ON THE MAP"}
+            </button>
+            <span className="text-xs text-neutral">
+              Heading somewhere? Search a town or area to see stations there.
+            </span>
+          </div>
+          {placeError ? (
+            <p className="mt-2 rounded-xl bg-amber/12 px-3 py-2 text-sm text-ink ring-1 ring-amber/30">{placeError}</p>
+          ) : null}
 
           <div className="mt-3 flex flex-wrap items-center gap-3">
             <label className="flex items-center gap-2 rounded-xl bg-paper/60 px-3 py-2 ring-1 ring-black/5">
