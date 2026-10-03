@@ -13,6 +13,7 @@ import {
 } from "@/components/form-controls";
 import { supabase } from "@/integrations/supabase/client";
 import { uploadStationPhoto, type DayHours, type StationInsert } from "@/lib/owner-stations";
+import { LeafletMap } from "@/components/leaflet-map";
 
 export const Route = createFileRoute("/_authenticated/owner/stations/new")({
   head: () => ({
@@ -227,10 +228,25 @@ function NewStation() {
           </div>
         </Panel>
 
-        <Panel title="Station location" description="Stand at your station and tap the button — no need to type coordinates.">
+        <Panel
+          title="Station location"
+          description="Tap the map exactly where your station is, or stand at your station and use the GPS button. No need to type coordinates."
+        >
           <GhostButton onClick={locate} disabled={locating}>
             {locating ? "GETTING LOCATION…" : coords ? "UPDATE TO MY CURRENT LOCATION" : "USE MY CURRENT LOCATION"}
           </GhostButton>
+          <div className="mt-3 overflow-hidden rounded-2xl border border-ink/10">
+            <LeafletMap
+              className="h-72 w-full"
+              center={coords}
+              zoom={coords ? 16 : 12}
+              onPick={(p) => setCoords(p)}
+              picked={coords}
+            />
+          </div>
+          <p className="mt-2 text-xs text-neutral">
+            Tap anywhere on the map to drop your station pin. Tap again to move it.
+          </p>
           {coords ? (
             <div className="mt-3">
               <Notice>
