@@ -83,11 +83,12 @@ function FindStation() {
         { headers: { Accept: "application/json" } },
       );
       const hits = (await res.json()) as { lat: string; lon: string; display_name: string }[];
-      if (!hits.length) {
+      const hit = hits[0];
+      if (!hit) {
         setPlaceError(`Couldn't find "${term}" in Kenya. Try a nearby town or landmark.`);
         return;
       }
-      setRider({ lat: Number(hits[0].lat), lng: Number(hits[0].lon) });
+      setRider({ lat: Number(hit.lat), lng: Number(hit.lon) });
       setLocationState("granted");
       setQuery("");
       setRadiusKm(10);
