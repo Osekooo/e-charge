@@ -144,7 +144,8 @@ function StationProfile() {
               REPORT THIS STATION
             </a>
             <Link
-              to="/find-station"
+              to="/navigate/$stationId"
+              params={{ stationId: station.id }}
               className="order-1 flex min-h-[52px] flex-1 items-center justify-center rounded-2xl bg-signal px-5 text-base font-semibold text-ink ring-1 ring-signal transition-colors hover:bg-signal/90 sm:order-2"
             >
               NAVIGATE HERE
