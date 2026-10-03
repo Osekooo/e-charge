@@ -84,7 +84,8 @@ function describe(m: { type: string; modifier?: string }, road: string) {
 function distToLineM(p: LatLng, line: [number, number][]) {
   let best = Infinity;
   for (let i = 0; i < line.length; i += 2) {
-    const d = haversineKm(p, { lat: line[i][0], lng: line[i][1] }) * 1000;
+    const pt = line[i]!;
+    const d = haversineKm(p, { lat: pt[0], lng: pt[1] }) * 1000;
     if (d < best) best = d;
   }
   return best;
@@ -142,8 +143,8 @@ function Navigate() {
       if (d < best) { best = d; idx = i; }
     });
     const passed = best * 1000 < 25;
-    next = route.steps[Math.min(passed ? idx + 1 : idx, route.steps.length - 1)];
-    nextDistM = haversineKm(rider, { lat: next.loc[0], lng: next.loc[1] }) * 1000;
+    next = route.steps[Math.min(passed ? idx + 1 : idx, route.steps.length - 1)] ?? null;
+    if (next) nextDistM = haversineKm(rider, { lat: next.loc[0], lng: next.loc[1] }) * 1000;
   }
   const ratio = route && remainingM != null ? Math.min(1, remainingM / Math.max(1, haversineKm(route.line[0] ? { lat: route.line[0][0], lng: route.line[0][1] } : station, station) * 1000)) : 1;
   const leftM = route ? route.distM * ratio : remainingM;
