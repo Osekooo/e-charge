@@ -64,7 +64,7 @@ function FindStation() {
   >("idle");
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  // Used to ignore tiny GPS drift when the rider is stationary.
+  // Used to remember the last accepted GPS position.
   const lastAcceptedGps = useRef<LatLng | null>(null);
 
   const requestLocation = () => {
@@ -76,72 +76,111 @@ function FindStation() {
 
     setLocStatus("locating");
 
-    navigator.geolocation.getCurrentPosition(
+    let bestPosition: GeolocationPosition | null = null;
+    let finished = false;
+
+    let watchId: number;
+
+    const finishLocation = () => {
+      if (finished) return;
+
+      finished = true;
+      navigator.geolocation.clearWatch(watchId);
+
+      if (!bestPosition) {
+        setLocationState("denied");
+        setLocStatus("error");
+        setTimeout(() => setLocStatus("idle"), 2500);
+        return;
+      }
+
+      const {
+        latitude,
+        longitude,
+        heading: gpsHeading,
+        speed,
+      } = bestPosition.coords;
+
+      const nextPosition = {
+        lat: latitude,
+        lng: longitude,
+      };
+
+      lastAcceptedGps.current = nextPosition;
+      setGps(nextPosition);
+      setRider(nextPosition);
+
+      // GPS heading is only useful while the device is moving.
+      setHeading(
+        gpsHeading != null &&
+          !Number.isNaN(gpsHeading) &&
+          (speed ?? 0) > 1
+          ? gpsHeading
+          : null,
+      );
+
+      setLocationState("granted");
+
+      // Recenter only because the rider deliberately requested location.
+      setRecenterTick((tick) => tick + 1);
+
+      setLocStatus("done");
+      setTimeout(() => setLocStatus("idle"), 1800);
+
+      console.log(
+        `E-Charge GPS: ${bestPosition.coords.accuracy.toFixed(1)}m accuracy`,
+        nextPosition,
+      );
+    };
+
+    watchId = navigator.geolocation.watchPosition(
       (pos) => {
         const {
           latitude,
           longitude,
           accuracy,
-          heading: gpsHeading,
-          speed,
         } = pos.coords;
 
-        // Do not use weak readings. Low-quality readings are the main reason
-        // maps jump far away or shake while a rider is standing still.
         if (
           !Number.isFinite(latitude) ||
           !Number.isFinite(longitude) ||
-          accuracy > 80
+          !Number.isFinite(accuracy)
         ) {
-          setLocStatus("error");
-          setTimeout(() => setLocStatus("idle"), 2500);
           return;
         }
 
-        const nextPosition = { lat: latitude, lng: longitude };
-        const previousPosition = lastAcceptedGps.current;
-
-        // Around 13 metres. Ignore smaller movements caused by normal GPS noise.
-        const hasMeaningfullyMoved =
-          !previousPosition ||
-          Math.abs(nextPosition.lat - previousPosition.lat) > 0.00012 ||
-          Math.abs(nextPosition.lng - previousPosition.lng) > 0.00012;
-
-        if (hasMeaningfullyMoved) {
-          lastAcceptedGps.current = nextPosition;
-          setGps(nextPosition);
-          setRider(nextPosition);
+        // Always keep the best GPS reading received.
+        if (
+          !bestPosition ||
+          accuracy < bestPosition.coords.accuracy
+        ) {
+          bestPosition = pos;
         }
 
-        // GPS heading is only reliable while moving.
-        setHeading(
-          gpsHeading != null &&
-            !Number.isNaN(gpsHeading) &&
-            (speed ?? 0) > 1
-            ? gpsHeading
-            : null,
-        );
-
-        setLocationState("granted");
-
-        // The map only recenters because the rider deliberately tapped
-        // "Use My Location", not because ordinary page updates happened.
-        setRecenterTick((tick) => tick + 1);
-
-        setLocStatus("done");
-        setTimeout(() => setLocStatus("idle"), 1800);
+        // A reading of 20m or better is considered a strong fix.
+        if (accuracy <= 20) {
+          finishLocation();
+        }
       },
       () => {
-        setLocationState("denied");
-        setLocStatus("error");
-        setTimeout(() => setLocStatus("idle"), 2500);
+        finishLocation();
       },
       {
+        // Ask the device for the highest accuracy available.
         enableHighAccuracy: true,
-        timeout: 15000,
-        maximumAge: 10000,
+
+        // Give the device enough time to obtain a proper fix.
+        timeout: 30000,
+
+        // Never use an old cached location.
+        maximumAge: 0,
       },
     );
+
+    // Give the GPS up to 15 seconds to improve the position.
+    setTimeout(() => {
+      finishLocation();
+    }, 15000);
   };
 
   const locLabel =
@@ -257,7 +296,9 @@ function FindStation() {
           }
           selectedId={selectedId}
           onPick={
-            locationState === "granted" ? (point) => setRider(point) : undefined
+            locationState === "granted"
+              ? (point) => setRider(point)
+              : undefined
           }
           pins={results
             .filter(
@@ -387,7 +428,8 @@ function FindStation() {
                 Location access is required to find nearby stations.
               </p>
               <p className="mt-1 text-sm leading-snug text-pretty text-ink/70">
-                You can try again, or pick your starting point on the map instead.
+                You can try again, or pick your starting point on the map
+                instead.
               </p>
 
               <div className="mt-3 flex flex-col gap-2 sm:flex-row">
@@ -546,9 +588,13 @@ function FindStation() {
           </div>
 
           <p className="mt-6 text-center text-xs text-neutral">
-            Only E-Charge verified stations are shown. Distances are straight-line
-            estimates for now; road distance arrives with in-app navigation.{" "}
-            <Link to="/register-station" className="underline underline-offset-2">
+            Only E-Charge verified stations are shown. Distances are
+            straight-line estimates for now; road distance arrives with
+            in-app navigation.{" "}
+            <Link
+              to="/register-station"
+              className="underline underline-offset-2"
+            >
               Own a station?
             </Link>
           </p>
