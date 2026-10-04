@@ -139,7 +139,11 @@ export function LeafletMap({
 
   useEffect(() => {
     draw();
-    if (center && map.current) map.current.setView([center.lat, center.lng], map.current.getZoom());
+    if (center && map.current) {
+      map.current.flyTo([center.lat, center.lng], Math.max(map.current.getZoom(), 14), {
+        duration: 1.2,
+      });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pins, rider?.lat, rider?.lng, picked?.lat, picked?.lng, center?.lat, center?.lng, recenterSignal, riderHeading, selectedId]);
 
