@@ -68,17 +68,21 @@ function FindStation() {
   // True while the rider marker should follow the real device.
   const trackingEnabled = useRef(true);
 
-  // Last accepted GPS fix. Used to reject obvious GPS jumps.
+  // GPS is a stream of estimates, not a single truth. We keep a short
+  // history and let the position converge instead of trusting the first fix.
+  const gpsSamplesRef = useRef<
+    { position: LatLng; accuracy: number; timestamp: number }[]
+  >([]);
+  const bestAccuracyRef = useRef<number>(Infinity);
   const lastAcceptedGps = useRef<LatLng | null>(null);
   const lastGpsTimestamp = useRef<number | null>(null);
-
-  // The visible marker is animated toward the newest GPS target.
   const riderRef = useRef<LatLng | null>(null);
   const targetGpsRef = useRef<LatLng | null>(null);
   const animationFrameRef = useRef<number | null>(null);
   const animationStartRef = useRef<LatLng | null>(null);
   const animationStartTimeRef = useRef<number | null>(null);
   const gpsWatchIdRef = useRef<number | null>(null);
+  const gpsPollRef = useRef<number | null>(null);
   const firstGpsFixRef = useRef(false);
   const manualRequestRef = useRef(false);
   const recenterOnNextFixRef = useRef(false);
@@ -89,13 +93,9 @@ function FindStation() {
     const lat2 = (b.lat * Math.PI) / 180;
     const dLat = lat2 - lat1;
     const dLng = ((b.lng - a.lng) * Math.PI) / 180;
-
     const h =
       Math.sin(dLat / 2) ** 2 +
-      Math.cos(lat1) *
-        Math.cos(lat2) *
-        Math.sin(dLng / 2) ** 2;
-
+      Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
     return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
   };
 
@@ -106,79 +106,88 @@ function FindStation() {
 
   const animateRiderTo = (target: LatLng) => {
     targetGpsRef.current = target;
-
     if (!riderRef.current) {
       updateRider(target);
       return;
     }
-
     if (animationFrameRef.current !== null) return;
 
     animationStartRef.current = riderRef.current;
     animationStartTimeRef.current = performance.now();
-
     const distance = distanceMeters(riderRef.current, target);
-    const duration = Math.min(1800, Math.max(450, distance * 10));
+    const duration = Math.min(1200, Math.max(350, distance * 8));
 
     const animate = (now: number) => {
       const start = animationStartRef.current;
       const latestTarget = targetGpsRef.current;
-
       if (!start || !latestTarget) {
         animationFrameRef.current = null;
         return;
       }
-
-      const elapsed = now - (animationStartTimeRef.current ?? now);
-      const progress = Math.min(1, elapsed / duration);
+      const progress = Math.min(
+        1,
+        (now - (animationStartTimeRef.current ?? now)) / duration,
+      );
       const eased = 1 - Math.pow(1 - progress, 3);
-
-      const next = {
+      updateRider({
         lat: start.lat + (latestTarget.lat - start.lat) * eased,
         lng: start.lng + (latestTarget.lng - start.lng) * eased,
-      };
-
-      updateRider(next);
+      });
 
       if (progress < 1) {
         animationFrameRef.current = requestAnimationFrame(animate);
       } else {
         animationFrameRef.current = null;
         updateRider(latestTarget);
-
         if (targetGpsRef.current !== latestTarget) {
           animateRiderTo(targetGpsRef.current);
         }
       }
     };
-
     animationFrameRef.current = requestAnimationFrame(animate);
+  };
+
+  const calculateConvergedPosition = () => {
+    const samples = gpsSamplesRef.current;
+    if (!samples.length) return null;
+
+    // Give accurate readings more influence. Keep only recent readings so the
+    // marker can follow a genuinely moving rider instead of old coordinates.
+    const recent = samples.slice(-8);
+    let latWeight = 0;
+    let lngWeight = 0;
+    let totalWeight = 0;
+
+    for (const sample of recent) {
+      const weight = 1 / Math.max(sample.accuracy, 5) ** 2;
+      latWeight += sample.position.lat * weight;
+      lngWeight += sample.position.lng * weight;
+      totalWeight += weight;
+    }
+
+    return {
+      lat: latWeight / totalWeight,
+      lng: lngWeight / totalWeight,
+    };
   };
 
   const acceptGpsPosition = (pos: GeolocationPosition) => {
     const { latitude, longitude, accuracy, heading: gpsHeading, speed } = pos.coords;
-
     if (
       !Number.isFinite(latitude) ||
       !Number.isFinite(longitude) ||
       !Number.isFinite(accuracy) ||
-      accuracy <= 0
-    ) {
-      return;
-    }
-
-    // Ignore very weak readings.
-    if (accuracy > 100) return;
+      accuracy <= 0 ||
+      accuracy > 100
+    ) return;
 
     const nextPosition = { lat: latitude, lng: longitude };
-    const previous = lastAcceptedGps.current;
     const now = pos.timestamp || Date.now();
-
+    const previous = lastAcceptedGps.current;
     const seconds =
       previous && lastGpsTimestamp.current
         ? Math.max((now - lastGpsTimestamp.current) / 1000, 0.1)
         : 0;
-
     const moved = previous ? distanceMeters(previous, nextPosition) : 0;
     const calculatedSpeed = previous && seconds > 0 ? moved / seconds : 0;
     const effectiveSpeed =
@@ -186,50 +195,60 @@ function FindStation() {
         ? speed
         : calculatedSpeed;
 
-    // Reject a sudden GPS teleport. A real moving boda should not jump 150m
-    // in a couple of seconds unless the device has produced a bad fix.
-    if (previous && seconds < 5 && moved > 150) {
-      console.log(`E-Charge GPS jump rejected: ${moved.toFixed(1)}m`);
-      return;
+    // Reject impossible teleporting readings.
+    if (previous && seconds < 5 && moved > 150) return;
+
+    gpsSamplesRef.current.push({
+      position: nextPosition,
+      accuracy,
+      timestamp: now,
+    });
+    gpsSamplesRef.current = gpsSamplesRef.current.slice(-8);
+
+    // Compare against the BEST accuracy seen before this reading. This makes
+    // a genuinely better fix capable of correcting the displayed position.
+    const accuracyWasBetter = accuracy + 3 < bestAccuracyRef.current;
+    if (accuracy < bestAccuracyRef.current) {
+      bestAccuracyRef.current = accuracy;
     }
 
-    // Ignore normal stationary GPS drift.
-    if (
-      previous &&
-      effectiveSpeed < 1.5 &&
-      moved < Math.max(7, accuracy * 0.35)
-    ) {
-      return;
-    }
+    const converged = calculateConvergedPosition();
+    if (!converged) return;
 
-    lastAcceptedGps.current = nextPosition;
+    // Do not let stationary noise constantly move the marker. But if the new
+    // reading is substantially more accurate, allow the estimate to correct.
+    const distanceFromVisible = riderRef.current
+      ? distanceMeters(riderRef.current, converged)
+      : Infinity;
+    const accuracyImproved = accuracyWasBetter;
+    const meaningfulCorrection =
+      !previous ||
+      effectiveSpeed >= 1.5 ||
+      distanceFromVisible > Math.max(5, accuracy * 0.25) ||
+      accuracyImproved;
+
+    if (!meaningfulCorrection) return;
+
+    lastAcceptedGps.current = converged;
     lastGpsTimestamp.current = now;
-    setGps(nextPosition);
+    setGps(converged);
     setLocationState("granted");
 
     setHeading(
-      gpsHeading != null &&
-        !Number.isNaN(gpsHeading) &&
-        effectiveSpeed > 1
+      gpsHeading != null && !Number.isNaN(gpsHeading) && effectiveSpeed > 1
         ? gpsHeading
         : null,
     );
 
-    if (trackingEnabled.current) {
-      animateRiderTo(nextPosition);
-    }
+    if (trackingEnabled.current) animateRiderTo(converged);
 
-    // Automatically center on the first usable GPS fix.
+    // The first fix establishes the map, but it is NOT treated as final.
+    // Subsequent readings continue correcting the position automatically.
     if (!firstGpsFixRef.current) {
       firstGpsFixRef.current = true;
-
-      if (trackingEnabled.current) {
-        updateRider(nextPosition);
-        setRecenterTick((tick) => tick + 1);
-      }
+      if (trackingEnabled.current) setRecenterTick((tick) => tick + 1);
     }
 
-    // A manual Use My Location request gets one explicit recenter.
     if (recenterOnNextFixRef.current && trackingEnabled.current) {
       recenterOnNextFixRef.current = false;
       setRecenterTick((tick) => tick + 1);
@@ -252,36 +271,34 @@ function FindStation() {
       setLocStatus("error");
       return;
     }
-
     if (gpsWatchIdRef.current !== null) return;
 
     setLocStatus("locating");
-
     try {
       gpsWatchIdRef.current = navigator.geolocation.watchPosition(
         acceptGpsPosition,
         (error) => {
           console.log("E-Charge GPS error:", error.code, error.message);
-
           if (error.code === 1) {
             setLocationState("denied");
             setLocStatus("error");
-            return;
-          }
-
-          if (!firstGpsFixRef.current) {
-            setLocStatus("error");
-            window.setTimeout(() => {
-              setLocStatus((current) => (current === "error" ? "idle" : current));
-            }, 2500);
           }
         },
-        {
-          enableHighAccuracy: true,
-          maximumAge: 0,
-          timeout: 30000,
-        },
+        { enableHighAccuracy: true, maximumAge: 0, timeout: 30000 },
       );
+
+      // Ask the browser for a fresh high-accuracy reading about once per
+      // second as an additional refinement loop. The OS may throttle this,
+      // but every returned reading is still compared before being accepted.
+      if (gpsPollRef.current === null) {
+        gpsPollRef.current = window.setInterval(() => {
+          navigator.geolocation.getCurrentPosition(
+            acceptGpsPosition,
+            () => {},
+            { enableHighAccuracy: true, maximumAge: 0, timeout: 2500 },
+          );
+        }, 1000);
+      }
     } catch (error) {
       console.error("E-Charge could not start GPS:", error);
       setLocStatus("error");
@@ -291,13 +308,20 @@ function FindStation() {
   const requestLocation = () => {
     trackingEnabled.current = true;
     manualRequestRef.current = true;
-    recenterOnNextFixRef.current = true;
 
-    setLocStatus("locating");
-
-    if (lastAcceptedGps.current) {
-      updateRider(lastAcceptedGps.current);
+    // If we already have a location, recenter IMMEDIATELY. Do not make the
+    // rider wait for another GPS fix just to press the button. New readings
+    // continue arriving in the background and refine the position.
+    if (riderRef.current) {
+      setGps(riderRef.current);
       setRecenterTick((tick) => tick + 1);
+      setLocStatus("done");
+      window.setTimeout(() => {
+        setLocStatus((current) => (current === "done" ? "idle" : current));
+      }, 700);
+    } else {
+      setLocStatus("locating");
+      recenterOnNextFixRef.current = true;
     }
 
     startLocationTracking();
@@ -305,16 +329,18 @@ function FindStation() {
 
   useEffect(() => {
     startLocationTracking();
-
     return () => {
       if (gpsWatchIdRef.current !== null) {
         navigator.geolocation.clearWatch(gpsWatchIdRef.current);
         gpsWatchIdRef.current = null;
       }
-
       if (animationFrameRef.current !== null) {
         cancelAnimationFrame(animationFrameRef.current);
         animationFrameRef.current = null;
+      }
+      if (gpsPollRef.current !== null) {
+        window.clearInterval(gpsPollRef.current);
+        gpsPollRef.current = null;
       }
     };
   }, []);
