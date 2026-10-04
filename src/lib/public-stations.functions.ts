@@ -7,7 +7,12 @@ const COLUMNS =
   "id,name,description,station_type,services,compatibility,swap_price,charging_price,contact_for_pricing,phone,whatsapp,opening_hours,address,town,county,access_instructions,latitude,longitude,is_open,updated_at";
 
 function publicClient() {
-  return createClient<Database>(process.env["SUPABASE_URL"]!, process.env["SUPABASE_PUBLISHABLE_KEY"]!, {
+  // Cloudflare builds may not define the server-side SUPABASE_* vars; fall back to the
+  // public VITE_* values baked in at build time so every host reads the same backend.
+  const url = process.env["SUPABASE_URL"] || import.meta.env.VITE_SUPABASE_URL;
+  const key = process.env["SUPABASE_PUBLISHABLE_KEY"] || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+  if (!url || !key) throw new Error("Backend connection is not configured on this host.");
+  return createClient<Database>(url, key, {
     auth: { storage: undefined, persistSession: false, autoRefreshToken: false },
   });
 }

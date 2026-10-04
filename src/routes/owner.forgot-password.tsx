@@ -31,7 +31,7 @@ function ForgotPassword() {
     event.preventDefault();
     setBusy(true);
     await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/owner/login`,
+      redirectTo: `${window.location.origin}/owner/reset-password`,
     });
     setBusy(false);
     // Always show the same message so we never reveal whether an email is registered.
