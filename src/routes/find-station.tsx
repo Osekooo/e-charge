@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { SiteHeader } from "@/components/site-header";
 import { LeafletMap } from "@/components/leaflet-map";
@@ -41,40 +41,93 @@ const markerLabel = (station: Station) =>
   `${station.type === "both" ? "Both" : station.type === "swap" ? "Swap" : "Charging"}${Number.isFinite(station.distanceKm) ? ` · ${station.distanceKm}km` : ""}`;
 
 function FindStation() {
-  const [locationState, setLocationState] = useState<LocationState>("prompt");
+  const [locationState, setLocationState] =
+    useState<LocationState>("prompt");
   const [query, setQuery] = useState("");
   const [battery, setBattery] = useState("");
   const [radiusKm, setRadiusKm] = useState(10);
   const [rider, setRider] = useState<LatLng | null>(null);
   const [recenterTick, setRecenterTick] = useState(0);
   const navigate = useNavigate();
+
   const { data: rows = [], isLoading, isError } = useQuery({
     queryKey: ["approved-stations"],
     queryFn: () => getApprovedStations(),
   });
 
-  // `gps` is the rider's real position; `rider` is the search origin (may be a searched place).
+  // gps is the rider's true device position.
+  // rider is the active search origin, which can also be a searched place.
   const [gps, setGps] = useState<LatLng | null>(null);
   const [heading, setHeading] = useState<number | null>(null);
-  const [locStatus, setLocStatus] = useState<"idle" | "locating" | "done" | "error">("idle");
+  const [locStatus, setLocStatus] = useState<
+    "idle" | "locating" | "done" | "error"
+  >("idle");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  // Used to ignore tiny GPS drift when the rider is stationary.
+  const lastAcceptedGps = useRef<LatLng | null>(null);
+
   const requestLocation = () => {
     if (typeof navigator === "undefined" || !navigator.geolocation) {
       setLocationState("denied");
       setLocStatus("error");
       return;
     }
+
     setLocStatus("locating");
+
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        const p = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-        setGps(p);
-        setRider(p);
-        // Heading is only trustworthy while moving; otherwise keep the marker unrotated.
-        const { heading: h, speed } = pos.coords;
-        setHeading(h != null && !Number.isNaN(h) && (speed ?? 0) > 1 ? h : null);
+        const {
+          latitude,
+          longitude,
+          accuracy,
+          heading: gpsHeading,
+          speed,
+        } = pos.coords;
+
+        // Do not use weak readings. Low-quality readings are the main reason
+        // maps jump far away or shake while a rider is standing still.
+        if (
+          !Number.isFinite(latitude) ||
+          !Number.isFinite(longitude) ||
+          accuracy > 80
+        ) {
+          setLocStatus("error");
+          setTimeout(() => setLocStatus("idle"), 2500);
+          return;
+        }
+
+        const nextPosition = { lat: latitude, lng: longitude };
+        const previousPosition = lastAcceptedGps.current;
+
+        // Around 13 metres. Ignore smaller movements caused by normal GPS noise.
+        const hasMeaningfullyMoved =
+          !previousPosition ||
+          Math.abs(nextPosition.lat - previousPosition.lat) > 0.00012 ||
+          Math.abs(nextPosition.lng - previousPosition.lng) > 0.00012;
+
+        if (hasMeaningfullyMoved) {
+          lastAcceptedGps.current = nextPosition;
+          setGps(nextPosition);
+          setRider(nextPosition);
+        }
+
+        // GPS heading is only reliable while moving.
+        setHeading(
+          gpsHeading != null &&
+            !Number.isNaN(gpsHeading) &&
+            (speed ?? 0) > 1
+            ? gpsHeading
+            : null,
+        );
+
         setLocationState("granted");
-        setRecenterTick((t) => t + 1);
+
+        // The map only recenters because the rider deliberately tapped
+        // "Use My Location", not because ordinary page updates happened.
+        setRecenterTick((tick) => tick + 1);
+
         setLocStatus("done");
         setTimeout(() => setLocStatus("idle"), 1800);
       },
@@ -83,44 +136,74 @@ function FindStation() {
         setLocStatus("error");
         setTimeout(() => setLocStatus("idle"), 2500);
       },
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
+      {
+        enableHighAccuracy: true,
+        timeout: 15000,
+        maximumAge: 10000,
+      },
     );
   };
-  const locLabel =
-    locStatus === "locating" ? "⟳ LOCATING…" : locStatus === "done" ? "✓ LOCATION UPDATED" : locStatus === "error" ? "LOCATION UNAVAILABLE" : "◎ USE MY LOCATION";
 
-  // Look up a place in Kenya (OpenStreetMap Nominatim — free, no API key) so
-  // riders can check stations where they are heading, not just where they are.
+  const locLabel =
+    locStatus === "locating"
+      ? "⟳ LOCATING…"
+      : locStatus === "done"
+        ? "✓ LOCATION UPDATED"
+        : locStatus === "error"
+          ? "LOCATION UNAVAILABLE"
+          : "◎ USE MY LOCATION";
+
+  // Search a Kenyan destination without replacing the rider's actual GPS
+  // location. This lets riders see stations around where they are going.
   const [placeBusy, setPlaceBusy] = useState(false);
   const [placeError, setPlaceError] = useState<string | null>(null);
+
   const searchPlace = async () => {
     const term = query.trim();
+
     if (!term) return;
+
     setPlaceBusy(true);
     setPlaceError(null);
+
     try {
       const res = await fetch(
         `https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=ke&q=${encodeURIComponent(term)}`,
         { headers: { Accept: "application/json" } },
       );
-      const hits = (await res.json()) as { lat: string; lon: string; display_name: string }[];
+
+      const hits = (await res.json()) as {
+        lat: string;
+        lon: string;
+        display_name: string;
+      }[];
+
       const hit = hits[0];
+
       if (!hit) {
-        setPlaceError(`Couldn't find "${term}" in Kenya. Try a nearby town or landmark.`);
+        setPlaceError(
+          `Couldn't find "${term}" in Kenya. Try a nearby town or landmark.`,
+        );
         return;
       }
-      setRider({ lat: Number(hit.lat), lng: Number(hit.lon) });
+
+      setRider({
+        lat: Number(hit.lat),
+        lng: Number(hit.lon),
+      });
+
       setLocationState("granted");
-      setRecenterTick((t) => t + 1);
+      setRecenterTick((tick) => tick + 1);
       setQuery("");
       setRadiusKm(15);
 
-      // Pan/scroll the viewport directly to the top where the map is located
       if (typeof window !== "undefined") {
         window.scrollTo({ top: 0, behavior: "smooth" });
       }
     } catch {
-      setPlaceError("Place search failed. Check your connection and try again.");
+      setPlaceError(
+        "Place search failed. Check your connection and try again.",
+      );
     } finally {
       setPlaceBusy(false);
     }
@@ -128,9 +211,15 @@ function FindStation() {
 
   const results = useMemo(() => {
     const term = query.trim().toLowerCase();
+
     return rows
       .map((row) => toStation(row, rider))
-      .filter((station) => !rider || !Number.isFinite(station.distanceKm) || station.distanceKm <= radiusKm)
+      .filter(
+        (station) =>
+          !rider ||
+          !Number.isFinite(station.distanceKm) ||
+          station.distanceKm <= radiusKm,
+      )
       .filter((station) =>
         term.length === 0
           ? true
@@ -142,7 +231,9 @@ function FindStation() {
       .sort((a, b) => (a.distanceKm || 1e9) - (b.distanceKm || 1e9));
   }, [rows, rider, query, radiusKm]);
 
-  const selected = selectedId ? results.find((r) => r.id === selectedId) ?? null : null;
+  const selected = selectedId
+    ? results.find((station) => station.id === selectedId) ?? null
+    : null;
 
   return (
     <div className="flex min-h-screen flex-col bg-ink">
@@ -159,55 +250,106 @@ function FindStation() {
           rider={rider}
           center={rider}
           recenterSignal={recenterTick}
-          riderHeading={rider && gps && rider.lat === gps.lat && rider.lng === gps.lng ? heading : null}
+          riderHeading={
+            rider && gps && rider.lat === gps.lat && rider.lng === gps.lng
+              ? heading
+              : null
+          }
           selectedId={selectedId}
-          onPick={locationState === "granted" ? (p) => setRider(p) : undefined}
+          onPick={
+            locationState === "granted" ? (point) => setRider(point) : undefined
+          }
           pins={results
-            .filter((st) => st.latitude != null && st.longitude != null)
-            .map((st) => ({
-              id: st.id,
-              lat: st.latitude!,
-              lng: st.longitude!,
-              tone: markerTone(st),
-              label: `${st.name} · ${markerLabel(st)}`,
-              onClick: () => setSelectedId(st.id),
+            .filter(
+              (station) =>
+                station.latitude != null && station.longitude != null,
+            )
+            .map((station) => ({
+              id: station.id,
+              lat: station.latitude!,
+              lng: station.longitude!,
+              tone: markerTone(station),
+              label: `${station.name} · ${markerLabel(station)}`,
+              onClick: () => setSelectedId(station.id),
             }))}
         />
+
         <button
           type="button"
           onClick={requestLocation}
           disabled={locStatus === "locating"}
           aria-label="Use my current location"
-          className={`absolute bottom-4 right-3 z-[500] flex min-h-[48px] items-center gap-2 rounded-xl px-4 text-sm font-semibold shadow-lg ring-1 transition-all active:scale-95 ${locStatus === "done" ? "bg-signal text-ink ring-signal" : "bg-paper text-ink ring-black/10 hover:bg-paper/90"}`}
+          className={`absolute right-3 bottom-4 z-[500] flex min-h-[48px] items-center gap-2 rounded-xl px-4 text-sm font-semibold shadow-lg ring-1 transition-all active:scale-95 ${
+            locStatus === "done"
+              ? "bg-signal text-ink ring-signal"
+              : "bg-paper text-ink ring-black/10 hover:bg-paper/90"
+          }`}
         >
-          <span className={locStatus === "locating" ? "inline-block animate-spin" : ""}>{locLabel.slice(0, 2)}</span>
+          <span
+            className={
+              locStatus === "locating" ? "inline-block animate-spin" : ""
+            }
+          >
+            {locLabel.slice(0, 2)}
+          </span>
           {locLabel.slice(2)}
         </button>
+
         {selected ? (
           <div className="absolute inset-x-3 top-3 z-[500] rounded-2xl bg-paper/95 p-3 text-ink shadow-xl ring-1 ring-black/10 sm:left-auto sm:w-80">
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
-                <p className="truncate font-display text-[15px] font-semibold">{selected.name}</p>
+                <p className="truncate font-display text-[15px] font-semibold">
+                  {selected.name}
+                </p>
                 <p className="text-xs text-ink/60">
-                  <span className={selected.status === "open" ? "font-semibold text-signal" : "font-semibold text-danger"}>
+                  <span
+                    className={
+                      selected.status === "open"
+                        ? "font-semibold text-signal"
+                        : "font-semibold text-danger"
+                    }
+                  >
                     {selected.status === "open" ? "Open now" : "Closed"}
                   </span>
-                  {Number.isFinite(selected.distanceKm) ? ` · ${selected.distanceKm} km away` : ""}
+                  {Number.isFinite(selected.distanceKm)
+                    ? ` · ${selected.distanceKm} km away`
+                    : ""}
                 </p>
               </div>
-              <button type="button" onClick={() => setSelectedId(null)} aria-label="Close" className="size-8 shrink-0 rounded-lg text-ink/60 hover:bg-ink/5">✕</button>
+
+              <button
+                type="button"
+                onClick={() => setSelectedId(null)}
+                aria-label="Close"
+                className="size-8 shrink-0 rounded-lg text-ink/60 hover:bg-ink/5"
+              >
+                ✕
+              </button>
             </div>
+
             <div className="mt-2 flex gap-2">
               <button
                 type="button"
-                onClick={() => navigate({ to: "/navigate/$stationId", params: { stationId: selected.id } })}
+                onClick={() =>
+                  navigate({
+                    to: "/navigate/$stationId",
+                    params: { stationId: selected.id },
+                  })
+                }
                 className="flex min-h-[44px] flex-1 items-center justify-center rounded-xl bg-signal text-sm font-semibold text-ink transition-all active:scale-95"
               >
                 START NAVIGATION
               </button>
+
               <button
                 type="button"
-                onClick={() => navigate({ to: "/stations/$stationId", params: { stationId: selected.id } })}
+                onClick={() =>
+                  navigate({
+                    to: "/stations/$stationId",
+                    params: { stationId: selected.id },
+                  })
+                }
                 className="flex min-h-[44px] items-center justify-center rounded-xl bg-paper px-3 text-sm font-medium ring-1 ring-black/10 transition-all active:scale-95"
               >
                 DETAILS
@@ -247,6 +389,7 @@ function FindStation() {
               <p className="mt-1 text-sm leading-snug text-pretty text-ink/70">
                 You can try again, or pick your starting point on the map instead.
               </p>
+
               <div className="mt-3 flex flex-col gap-2 sm:flex-row">
                 <button
                   type="button"
@@ -255,9 +398,13 @@ function FindStation() {
                 >
                   {locStatus === "locating" ? "⟳ LOCATING…" : "TRY AGAIN"}
                 </button>
+
                 <button
                   type="button"
-                  onClick={() => { setRider(null); setLocationState("granted"); }}
+                  onClick={() => {
+                    setRider(null);
+                    setLocationState("granted");
+                  }}
                   className="flex min-h-[48px] flex-1 items-center justify-center rounded-xl bg-paper/70 text-sm font-medium text-ink ring-1 ring-black/10 transition-colors hover:bg-paper"
                 >
                   CHOOSE LOCATION ON MAP
@@ -270,8 +417,16 @@ function FindStation() {
             <div className="flex items-center gap-2 rounded-2xl bg-signal/12 px-4 py-3 ring-1 ring-signal/30">
               <span className="size-3 shrink-0 rounded-full bg-signal" />
               <p className="text-sm leading-snug text-pretty text-ink/80">
-                {!rider ? "Tap the map to set your starting point." : gps && rider.lat === gps.lat && rider.lng === gps.lng ? "Using your location." : "Showing a searched or picked place — tap Use My Location to return."} Showing stations within{" "}
-                <strong className="font-semibold">{radiusKm} km</strong>, nearest first.
+                {!rider
+                  ? "Tap the map to set your starting point."
+                  : gps &&
+                      rider.lat === gps.lat &&
+                      rider.lng === gps.lng
+                    ? "Using your location."
+                    : "Showing a searched or picked place — tap Use My Location to return."}{" "}
+                Showing stations within{" "}
+                <strong className="font-semibold">{radiusKm} km</strong>,
+                nearest first.
               </p>
             </div>
           ) : null}
@@ -301,17 +456,23 @@ function FindStation() {
             >
               {placeBusy ? "SEARCHING…" : "SEARCH THIS PLACE ON THE MAP"}
             </button>
+
             <span className="text-xs text-neutral">
               Heading somewhere? Search a town or area to see stations there.
             </span>
           </div>
+
           {placeError ? (
-            <p className="mt-2 rounded-xl bg-amber/12 px-3 py-2 text-sm text-ink ring-1 ring-amber/30">{placeError}</p>
+            <p className="mt-2 rounded-xl bg-amber/12 px-3 py-2 text-sm text-ink ring-1 ring-amber/30">
+              {placeError}
+            </p>
           ) : null}
 
           <div className="mt-3 flex flex-wrap items-center gap-3">
             <label className="flex items-center gap-2 rounded-xl bg-paper/60 px-3 py-2 ring-1 ring-black/5">
-              <span className="text-xs text-ink/60">Battery level (optional)</span>
+              <span className="text-xs text-ink/60">
+                Battery level (optional)
+              </span>
               <input
                 value={battery}
                 onChange={(event) => setBattery(event.target.value)}
@@ -321,25 +482,36 @@ function FindStation() {
               />
               <span className="text-sm text-ink/60">%</span>
             </label>
+
             <span className="text-xs text-neutral">
               Battery level is never required to search.
             </span>
           </div>
 
           <div className="mt-5 flex items-baseline justify-between">
-            <h2 className="font-display text-lg font-semibold text-ink">Nearby stations</h2>
+            <h2 className="font-display text-lg font-semibold text-ink">
+              Nearby stations
+            </h2>
             <span className="text-xs text-neutral">
-              {rider ? `${results.length} within ${radiusKm} km` : `${results.length} stations`}
+              {rider
+                ? `${results.length} within ${radiusKm} km`
+                : `${results.length} stations`}
             </span>
           </div>
 
           <div className="mt-3 space-y-3">
             {isLoading ? (
-              <p className="py-6 text-center text-sm text-ink/60">Loading stations…</p>
+              <p className="py-6 text-center text-sm text-ink/60">
+                Loading stations…
+              </p>
             ) : isError ? (
-              <p className="py-6 text-center text-sm text-danger">Could not load stations. Check your connection and try again.</p>
+              <p className="py-6 text-center text-sm text-danger">
+                Could not load stations. Check your connection and try again.
+              </p>
             ) : results.length > 0 ? (
-              results.map((station) => <StationCard key={station.id} station={station} />)
+              results.map((station) => (
+                <StationCard key={station.id} station={station} />
+              ))
             ) : (
               <div className="rounded-[18px] bg-paper/70 p-5 text-center ring-1 ring-black/5">
                 <p className="font-display text-[17px] font-semibold text-ink">
@@ -348,6 +520,7 @@ function FindStation() {
                 <p className="mt-1 text-sm text-ink/60">
                   We searched a {radiusKm} km radius around your location.
                 </p>
+
                 <div className="mt-4 flex flex-col gap-2 sm:flex-row">
                   <button
                     type="button"
@@ -356,6 +529,7 @@ function FindStation() {
                   >
                     EXPAND SEARCH
                   </button>
+
                   <button
                     type="button"
                     onClick={() => {
@@ -372,8 +546,8 @@ function FindStation() {
           </div>
 
           <p className="mt-6 text-center text-xs text-neutral">
-            Only E-Charge verified stations are shown. Distances are straight-line estimates for
-            now; road distance arrives with in-app navigation.{" "}
+            Only E-Charge verified stations are shown. Distances are straight-line
+            estimates for now; road distance arrives with in-app navigation.{" "}
             <Link to="/register-station" className="underline underline-offset-2">
               Own a station?
             </Link>
