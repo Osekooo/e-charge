@@ -306,14 +306,16 @@ function FindStation() {
   };
 
   const requestLocation = () => {
+    // This button is ALWAYS GPS-only. Never use the manually searched/picked
+    // map coordinate as the rider's location.
     trackingEnabled.current = true;
+    setGpsMode(true);
     manualRequestRef.current = true;
 
-    // If we already have a location, recenter IMMEDIATELY. Do not make the
-    // rider wait for another GPS fix just to press the button. New readings
-    // continue arriving in the background and refine the position.
-    if (riderRef.current) {
-      setGps(riderRef.current);
+    // If we already have a genuine GPS fix, use that GPS fix immediately.
+    // Otherwise request a fresh device location and recenter when it arrives.
+    if (gps) {
+      updateRider(gps);
       setRecenterTick((tick) => tick + 1);
       setLocStatus("done");
       window.setTimeout(() => {
@@ -322,6 +324,16 @@ function FindStation() {
     } else {
       setLocStatus("locating");
       recenterOnNextFixRef.current = true;
+    }
+
+    // A fresh GPS request is started immediately; the 1-second refinement
+    // loop continues asking for newer readings in the background.
+    if (typeof navigator !== "undefined" && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        acceptGpsPosition,
+        () => {},
+        { enableHighAccuracy: true, maximumAge: 0, timeout: 2500 },
+      );
     }
 
     startLocationTracking();
