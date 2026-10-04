@@ -44,8 +44,10 @@ function FindStation() {
   const [locationState, setLocationState] =
     useState<LocationState>("prompt");
   const [query, setQuery] = useState("");
-  const [battery, setBattery] = useState("");
   const [radiusKm, setRadiusKm] = useState(10);
+  const [searchCenter, setSearchCenter] = useState<LatLng | null>(null);
+  const [placeBusy, setPlaceBusy] = useState(false);
+  const [placeError, setPlaceError] = useState<string | null>(null);
   const [rider, setRider] = useState<LatLng | null>(null);
   const [recenterTick, setRecenterTick] = useState(0);
   const navigate = useNavigate();
@@ -276,14 +278,56 @@ function FindStation() {
           ? "LOCATION UNAVAILABLE"
           : "◎ USE MY LOCATION";
 
+  const searchPlace = async () => {
+    const term = query.trim();
+    if (!term) return;
+
+    setPlaceBusy(true);
+    setPlaceError(null);
+
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=ke&q=${encodeURIComponent(term)}`,
+        { headers: { Accept: "application/json" } },
+      );
+
+      const hits = (await response.json()) as {
+        lat: string;
+        lon: string;
+        display_name: string;
+      }[];
+
+      const hit = hits[0];
+      if (!hit) {
+        setPlaceError(`Couldn't find "${term}" in Kenya. Try a nearby town or landmark.`);
+        return;
+      }
+
+      const destination = { lat: Number(hit.lat), lng: Number(hit.lon) };
+      setSearchCenter(destination);
+      setRadiusKm(15);
+      setRecenterTick((tick) => tick + 1);
+      setQuery("");
+
+      if (typeof window !== "undefined") {
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
+    } catch {
+      setPlaceError("Place search failed. Check your connection and try again.");
+    } finally {
+      setPlaceBusy(false);
+    }
+  };
+
   const results = useMemo(() => {
+    const searchOrigin = searchCenter ?? rider;
     const term = query.trim().toLowerCase();
 
     return rows
-      .map((row) => toStation(row, rider))
+      .map((row) => toStation(row, searchOrigin))
       .filter(
         (station) =>
-          !rider ||
+          !searchOrigin ||
           !Number.isFinite(station.distanceKm) ||
           station.distanceKm <= radiusKm,
       )
@@ -296,7 +340,7 @@ function FindStation() {
               .includes(term),
       )
       .sort((a, b) => (a.distanceKm || 1e9) - (b.distanceKm || 1e9));
-  }, [rows, rider, query, radiusKm]);
+  }, [rows, rider, searchCenter, query, radiusKm]);
 
   const selected = selectedId
     ? results.find((station) => station.id === selectedId) ?? null
@@ -315,7 +359,7 @@ function FindStation() {
         <LeafletMap
           className="h-[300px] sm:h-[340px]"
           rider={rider}
-          center={rider}
+          center={searchCenter ?? rider}
           recenterSignal={recenterTick}
           riderHeading={
             rider && gps && rider.lat === gps.lat && rider.lng === gps.lng
@@ -340,7 +384,10 @@ function FindStation() {
 
         <button
           type="button"
-          onClick={requestLocation}
+          onClick={() => {
+            setSearchCenter(null);
+            requestLocation();
+          }}
           disabled={locStatus === "locating"}
           aria-label="Use my current location"
           className={`absolute right-3 bottom-4 z-[500] flex min-h-[48px] items-center gap-2 rounded-xl px-4 text-sm font-semibold shadow-lg ring-1 transition-all active:scale-95 ${
@@ -469,9 +516,11 @@ function FindStation() {
             <div className="flex items-center gap-2 rounded-2xl bg-signal/12 px-4 py-3 ring-1 ring-signal/30">
               <span className="size-3 shrink-0 rounded-full bg-signal" />
               <p className="text-sm leading-snug text-pretty text-ink/80">
-                {gps
-                  ? "Using your best available device location. E-Charge keeps refining it automatically."
-                  : "Waiting for a device location fix…"}{" "}
+                {searchCenter
+                  ? "Searching stations around your selected destination. Your rider location remains active in the background."
+                  : gps
+                    ? "Using your best available device location. E-Charge keeps refining it automatically."
+                    : "Waiting for a device location fix…"}{" "}
                 Showing stations within{" "}
                 <strong className="font-semibold">{radiusKm} km</strong>,
                 nearest first.
@@ -491,33 +540,44 @@ function FindStation() {
                 }
               }}
               className="w-full bg-transparent text-base text-ink placeholder:text-neutral focus:outline-none"
-              placeholder="Search station, area, town or county"
+              placeholder="Where are you going? Search a town, area or station"
             />
           </div>
 
-          <p className="mt-2 text-xs text-neutral">
-            Search filters stations only. Your rider location always comes from the device.
-          </p>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={searchPlace}
+              disabled={placeBusy || !query.trim()}
+              className="min-h-[44px] rounded-xl bg-ink px-4 text-sm font-semibold text-paper transition-colors hover:bg-ink/90 disabled:opacity-50"
+            >
+              {placeBusy ? "SEARCHING…" : "SEARCH THIS PLACE ON THE MAP"}
+            </button>
 
-          <div className="mt-3 flex flex-wrap items-center gap-3">
-            <label className="flex items-center gap-2 rounded-xl bg-paper/60 px-3 py-2 ring-1 ring-black/5">
-              <span className="text-xs text-ink/60">
-                Battery level (optional)
-              </span>
-              <input
-                value={battery}
-                onChange={(event) => setBattery(event.target.value)}
-                inputMode="numeric"
-                placeholder="—"
-                className="w-12 bg-transparent text-sm text-ink placeholder:text-neutral focus:outline-none"
-              />
-              <span className="text-sm text-ink/60">%</span>
-            </label>
-
-            <span className="text-xs text-neutral">
-              Battery level is never required to search.
-            </span>
+            {searchCenter ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchCenter(null);
+                  setRadiusKm(10);
+                  setRecenterTick((tick) => tick + 1);
+                }}
+                className="min-h-[44px] rounded-xl bg-paper px-4 text-sm font-medium text-ink ring-1 ring-black/10"
+              >
+                BACK TO MY LOCATION
+              </button>
+            ) : null}
           </div>
+
+          {placeError ? (
+            <p className="mt-2 rounded-xl bg-amber/12 px-3 py-2 text-sm text-ink ring-1 ring-amber/30">
+              {placeError}
+            </p>
+          ) : null}
+
+          <p className="mt-2 text-xs text-neutral">
+            Search a destination to see stations there. Your actual rider location stays device-based.
+          </p>
 
           <div className="mt-5 flex items-baseline justify-between">
             <h2 className="font-display text-lg font-semibold text-ink">
