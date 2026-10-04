@@ -55,304 +55,214 @@ function FindStation() {
     queryFn: () => getApprovedStations(),
   });
 
-  // gps is the rider's true device position.
-  // rider is the active search origin, which can also be a searched place.
+  // Location engine: browser/OS continuously supplies the best position it can.
+  // `gps` is the trusted device position; `rider` is the smoothed map position.
   const [gps, setGps] = useState<LatLng | null>(null);
   const [heading, setHeading] = useState<number | null>(null);
   const [locStatus, setLocStatus] = useState<
     "idle" | "locating" | "done" | "error"
   >("idle");
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [gpsMode, setGpsMode] = useState(true);
 
-  // True while the rider marker should follow the real device.
-  const trackingEnabled = useRef(true);
-
-  // GPS is a stream of estimates, not a single truth. We keep a short
-  // history and let the position converge instead of trusting the first fix.
-  const gpsSamplesRef = useRef<
-    { position: LatLng; accuracy: number; timestamp: number }[]
-  >([]);
-  const bestAccuracyRef = useRef<number>(Infinity);
-  const lastAcceptedGps = useRef<LatLng | null>(null);
-  const lastGpsTimestamp = useRef<number | null>(null);
-  const riderRef = useRef<LatLng | null>(null);
-  const targetGpsRef = useRef<LatLng | null>(null);
-  const animationFrameRef = useRef<number | null>(null);
-  const animationStartRef = useRef<LatLng | null>(null);
-  const animationStartTimeRef = useRef<number | null>(null);
-  const gpsWatchIdRef = useRef<number | null>(null);
-  const gpsPollRef = useRef<number | null>(null);
-  const firstGpsFixRef = useRef(false);
-  const manualRequestRef = useRef(false);
-  const recenterOnNextFixRef = useRef(false);
+  const watchId = useRef<number | null>(null);
+  const pollTimer = useRef<number | null>(null);
+  const pollBusy = useRef(false);
+  const lastFix = useRef<GeolocationPosition | null>(null);
+  const bestAccuracy = useRef<number>(Infinity);
+  const animationFrame = useRef<number | null>(null);
+  const riderTarget = useRef<LatLng | null>(null);
 
   const distanceMeters = (a: LatLng, b: LatLng) => {
     const R = 6371000;
-    const lat1 = (a.lat * Math.PI) / 180;
-    const lat2 = (b.lat * Math.PI) / 180;
-    const dLat = lat2 - lat1;
-    const dLng = ((b.lng - a.lng) * Math.PI) / 180;
-    const h =
-      Math.sin(dLat / 2) ** 2 +
-      Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
-    return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
-  };
-
-  const updateRider = (position: LatLng | null) => {
-    riderRef.current = position;
-    setRider(position);
+    const toRad = (value: number) => (value * Math.PI) / 180;
+    const dLat = toRad(b.lat - a.lat);
+    const dLng = toRad(b.lng - a.lng);
+    const lat1 = toRad(a.lat);
+    const lat2 = toRad(b.lat);
+    const x = Math.sin(dLat / 2) ** 2;
+    const y = Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+    return 2 * R * Math.atan2(Math.sqrt(x + y), Math.sqrt(1 - x - y));
   };
 
   const animateRiderTo = (target: LatLng) => {
-    targetGpsRef.current = target;
-    if (!riderRef.current) {
-      updateRider(target);
-      return;
+    riderTarget.current = target;
+
+    if (animationFrame.current != null) {
+      cancelAnimationFrame(animationFrame.current);
     }
-    if (animationFrameRef.current !== null) return;
 
-    animationStartRef.current = riderRef.current;
-    animationStartTimeRef.current = performance.now();
-    const distance = distanceMeters(riderRef.current, target);
-    const duration = Math.min(1200, Math.max(350, distance * 8));
+    const started = rider ?? target;
+    const from = started ?? target;
+    const startedAt = performance.now();
+    const duration = Math.min(
+      900,
+      Math.max(250, distanceMeters(from, target) * 35),
+    );
 
-    const animate = (now: number) => {
-      const start = animationStartRef.current;
-      const latestTarget = targetGpsRef.current;
-      if (!start || !latestTarget) {
-        animationFrameRef.current = null;
-        return;
-      }
-      const progress = Math.min(
-        1,
-        (now - (animationStartTimeRef.current ?? now)) / duration,
-      );
-      const eased = 1 - Math.pow(1 - progress, 3);
-      updateRider({
-        lat: start.lat + (latestTarget.lat - start.lat) * eased,
-        lng: start.lng + (latestTarget.lng - start.lng) * eased,
-      });
+    const frame = (now: number) => {
+      const progress = Math.min(1, (now - startedAt) / duration);
+      const eased = 1 - (1 - progress) ** 3;
+      const next = {
+        lat: from.lat + (target.lat - from.lat) * eased,
+        lng: from.lng + (target.lng - from.lng) * eased,
+      };
+
+      setRider(next);
 
       if (progress < 1) {
-        animationFrameRef.current = requestAnimationFrame(animate);
+        animationFrame.current = requestAnimationFrame(frame);
       } else {
-        animationFrameRef.current = null;
-        updateRider(latestTarget);
-        if (targetGpsRef.current !== latestTarget) {
-          animateRiderTo(targetGpsRef.current);
-        }
+        animationFrame.current = null;
       }
     };
-    animationFrameRef.current = requestAnimationFrame(animate);
+
+    animationFrame.current = requestAnimationFrame(frame);
   };
 
-  const calculateConvergedPosition = () => {
-    const samples = gpsSamplesRef.current;
-    if (!samples.length) return null;
+  const acceptLocation = (pos: GeolocationPosition) => {
+    const {
+      latitude,
+      longitude,
+      accuracy,
+      heading: gpsHeading,
+      speed,
+    } = pos.coords;
 
-    // Give accurate readings more influence. Keep only recent readings so the
-    // marker can follow a genuinely moving rider instead of old coordinates.
-    const recent = samples.slice(-8);
-    let latWeight = 0;
-    let lngWeight = 0;
-    let totalWeight = 0;
-
-    for (const sample of recent) {
-      const weight = 1 / Math.max(sample.accuracy, 5) ** 2;
-      latWeight += sample.position.lat * weight;
-      lngWeight += sample.position.lng * weight;
-      totalWeight += weight;
-    }
-
-    return {
-      lat: latWeight / totalWeight,
-      lng: lngWeight / totalWeight,
-    };
-  };
-
-  const acceptGpsPosition = (pos: GeolocationPosition) => {
-    const { latitude, longitude, accuracy, heading: gpsHeading, speed } = pos.coords;
     if (
       !Number.isFinite(latitude) ||
       !Number.isFinite(longitude) ||
       !Number.isFinite(accuracy) ||
       accuracy <= 0 ||
       accuracy > 100
-    ) return;
-
-    const nextPosition = { lat: latitude, lng: longitude };
-    const now = pos.timestamp || Date.now();
-    const previous = lastAcceptedGps.current;
-    const seconds =
-      previous && lastGpsTimestamp.current
-        ? Math.max((now - lastGpsTimestamp.current) / 1000, 0.1)
-        : 0;
-    const moved = previous ? distanceMeters(previous, nextPosition) : 0;
-    const calculatedSpeed = previous && seconds > 0 ? moved / seconds : 0;
-    const effectiveSpeed =
-      speed != null && Number.isFinite(speed) && speed >= 0
-        ? speed
-        : calculatedSpeed;
-
-    // Reject impossible teleporting readings.
-    if (previous && seconds < 5 && moved > 150) return;
-
-    gpsSamplesRef.current.push({
-      position: nextPosition,
-      accuracy,
-      timestamp: now,
-    });
-    gpsSamplesRef.current = gpsSamplesRef.current.slice(-8);
-
-    // Compare against the BEST accuracy seen before this reading. This makes
-    // a genuinely better fix capable of correcting the displayed position.
-    const accuracyWasBetter = accuracy + 3 < bestAccuracyRef.current;
-    if (accuracy < bestAccuracyRef.current) {
-      bestAccuracyRef.current = accuracy;
+    ) {
+      return;
     }
 
-    const converged = calculateConvergedPosition();
-    if (!converged) return;
+    const nextPosition = { lat: latitude, lng: longitude };
+    const previous = lastFix.current;
+    const previousPosition = previous
+      ? { lat: previous.coords.latitude, lng: previous.coords.longitude }
+      : null;
 
-    // Do not let stationary noise constantly move the marker. But if the new
-    // reading is substantially more accurate, allow the estimate to correct.
-    const distanceFromVisible = riderRef.current
-      ? distanceMeters(riderRef.current, converged)
-      : Infinity;
-    const accuracyImproved = accuracyWasBetter;
-    const meaningfulCorrection =
-      !previous ||
-      effectiveSpeed >= 1.5 ||
-      distanceFromVisible > Math.max(5, accuracy * 0.25) ||
-      accuracyImproved;
+    // Reject an implausible jump unless the new reading is substantially more
+    // accurate. This prevents a weak Wi-Fi/cell estimate from throwing the map.
+    if (previous && previousPosition) {
+      const elapsed = Math.max(0.5, (pos.timestamp - previous.timestamp) / 1000);
+      const moved = distanceMeters(previousPosition, nextPosition);
+      const reportedSpeed = Number.isFinite(speed ?? NaN) ? speed ?? 0 : 0;
+      const impliedSpeed = moved / elapsed;
+      const accuracyImprovedALot = accuracy + 20 < bestAccuracy.current;
+      const plausible =
+        impliedSpeed <= Math.max(55, reportedSpeed + 35) ||
+        moved <= Math.max(accuracy * 1.5, 40);
 
-    if (!meaningfulCorrection) return;
+      if (!plausible && !accuracyImprovedALot) {
+        return;
+      }
+    }
 
-    lastAcceptedGps.current = converged;
-    lastGpsTimestamp.current = now;
-    setGps(converged);
+    lastFix.current = pos;
+
+    // Better accuracy always wins. Similar-quality readings are also accepted
+    // so the position can follow a moving rider instead of freezing.
+    const accuracyImproved = accuracy < bestAccuracy.current;
+    if (accuracyImproved) bestAccuracy.current = accuracy;
+
+    setGps(nextPosition);
+    animateRiderTo(nextPosition);
     setLocationState("granted");
+    setLocStatus("done");
 
     setHeading(
-      gpsHeading != null && !Number.isNaN(gpsHeading) && effectiveSpeed > 1
+      gpsHeading != null &&
+        Number.isFinite(gpsHeading) &&
+        (speed ?? 0) > 1
         ? gpsHeading
         : null,
     );
-
-    if (trackingEnabled.current) animateRiderTo(converged);
-
-    // The first fix establishes the map, but it is NOT treated as final.
-    // Subsequent readings continue correcting the position automatically.
-    if (!firstGpsFixRef.current) {
-      firstGpsFixRef.current = true;
-      if (trackingEnabled.current) setRecenterTick((tick) => tick + 1);
-    }
-
-    if (recenterOnNextFixRef.current && trackingEnabled.current) {
-      recenterOnNextFixRef.current = false;
-      setRecenterTick((tick) => tick + 1);
-    }
-
-    if (manualRequestRef.current) {
-      manualRequestRef.current = false;
-      setLocStatus("done");
-      window.setTimeout(() => {
-        setLocStatus((current) => (current === "done" ? "idle" : current));
-      }, 1200);
-    } else {
-      setLocStatus("idle");
-    }
   };
 
-  const startLocationTracking = () => {
+  const startLocationEngine = () => {
     if (typeof navigator === "undefined" || !navigator.geolocation) {
       setLocationState("denied");
       setLocStatus("error");
       return;
     }
-    if (gpsWatchIdRef.current !== null) return;
 
     setLocStatus("locating");
-    try {
-      gpsWatchIdRef.current = navigator.geolocation.watchPosition(
-        acceptGpsPosition,
-        (error) => {
-          console.log("E-Charge GPS error:", error.code, error.message);
-          if (error.code === 1) {
+
+    if (watchId.current == null) {
+      watchId.current = navigator.geolocation.watchPosition(
+        acceptLocation,
+        () => {
+          if (!lastFix.current) {
             setLocationState("denied");
             setLocStatus("error");
           }
         },
-        { enableHighAccuracy: true, maximumAge: 0, timeout: 30000 },
+        {
+          enableHighAccuracy: true,
+          timeout: 5000,
+          maximumAge: 0,
+        },
       );
+    }
 
-      // Ask the browser for a fresh high-accuracy reading about once per
-      // second as an additional refinement loop. The OS may throttle this,
-      // but every returned reading is still compared before being accepted.
-      if (gpsPollRef.current === null) {
-        gpsPollRef.current = window.setInterval(() => {
+    // Ask for a fresh browser/OS reading about once per second as an additional
+    // refinement path. The OS may still choose its own sensor/update cadence.
+    if (pollTimer.current == null) {
+      const poll = () => {
+        if (!pollBusy.current) {
+          pollBusy.current = true;
           navigator.geolocation.getCurrentPosition(
-            acceptGpsPosition,
-            () => {},
-            { enableHighAccuracy: true, maximumAge: 0, timeout: 2500 },
+            (pos) => {
+              pollBusy.current = false;
+              acceptLocation(pos);
+            },
+            () => {
+              pollBusy.current = false;
+            },
+            {
+              enableHighAccuracy: true,
+              timeout: 1800,
+              maximumAge: 0,
+            },
           );
-        }, 1000);
-      }
-    } catch (error) {
-      console.error("E-Charge could not start GPS:", error);
-      setLocStatus("error");
+        }
+      };
+
+      poll();
+      pollTimer.current = window.setInterval(poll, 1000);
     }
   };
 
   const requestLocation = () => {
-    // This button is ALWAYS GPS-only. Never use the manually searched/picked
-    // map coordinate as the rider's location.
-    trackingEnabled.current = true;
-    setGpsMode(true);
-    manualRequestRef.current = true;
+    // The button is intentionally fast: restart/confirm the location engine
+    // and immediately recenter on the newest trusted position if one exists.
+    startLocationEngine();
 
-    // If we already have a genuine GPS fix, use that GPS fix immediately.
-    // Otherwise request a fresh device location and recenter when it arrives.
     if (gps) {
-      updateRider(gps);
+      setRider(gps);
       setRecenterTick((tick) => tick + 1);
       setLocStatus("done");
-      window.setTimeout(() => {
-        setLocStatus((current) => (current === "done" ? "idle" : current));
-      }, 700);
-    } else {
-      setLocStatus("locating");
-      recenterOnNextFixRef.current = true;
     }
-
-    // A fresh GPS request is started immediately; the 1-second refinement
-    // loop continues asking for newer readings in the background.
-    if (typeof navigator !== "undefined" && navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        acceptGpsPosition,
-        () => {},
-        { enableHighAccuracy: true, maximumAge: 0, timeout: 2500 },
-      );
-    }
-
-    startLocationTracking();
   };
 
   useEffect(() => {
-    startLocationTracking();
+    startLocationEngine();
+
     return () => {
-      if (gpsWatchIdRef.current !== null) {
-        navigator.geolocation.clearWatch(gpsWatchIdRef.current);
-        gpsWatchIdRef.current = null;
+      if (watchId.current != null) {
+        navigator.geolocation?.clearWatch(watchId.current);
+        watchId.current = null;
       }
-      if (animationFrameRef.current !== null) {
-        cancelAnimationFrame(animationFrameRef.current);
-        animationFrameRef.current = null;
+      if (pollTimer.current != null) {
+        window.clearInterval(pollTimer.current);
+        pollTimer.current = null;
       }
-      if (gpsPollRef.current !== null) {
-        window.clearInterval(gpsPollRef.current);
-        gpsPollRef.current = null;
+      if (animationFrame.current != null) {
+        cancelAnimationFrame(animationFrame.current);
+        animationFrame.current = null;
       }
     };
   }, []);
@@ -365,65 +275,6 @@ function FindStation() {
         : locStatus === "error"
           ? "LOCATION UNAVAILABLE"
           : "◎ USE MY LOCATION";
-
-  // Search a Kenyan destination without replacing the rider's actual GPS
-  // location. This lets riders see stations around where they are going.
-  const [placeBusy, setPlaceBusy] = useState(false);
-  const [placeError, setPlaceError] = useState<string | null>(null);
-
-  const searchPlace = async () => {
-    const term = query.trim();
-
-    if (!term) return;
-
-    setPlaceBusy(true);
-    setPlaceError(null);
-
-    try {
-      const res = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=ke&q=${encodeURIComponent(term)}`,
-        { headers: { Accept: "application/json" } },
-      );
-
-      const hits = (await res.json()) as {
-        lat: string;
-        lon: string;
-        display_name: string;
-      }[];
-
-      const hit = hits[0];
-
-      if (!hit) {
-        setPlaceError(
-          `Couldn't find "${term}" in Kenya. Try a nearby town or landmark.`,
-        );
-        return;
-      }
-
-      trackingEnabled.current = false;
-      setGpsMode(false);
-
-      updateRider({
-        lat: Number(hit.lat),
-        lng: Number(hit.lon),
-      });
-
-      setLocationState("granted");
-      setRecenterTick((tick) => tick + 1);
-      setQuery("");
-      setRadiusKm(15);
-
-      if (typeof window !== "undefined") {
-        window.scrollTo({ top: 0, behavior: "smooth" });
-      }
-    } catch {
-      setPlaceError(
-        "Place search failed. Check your connection and try again.",
-      );
-    } finally {
-      setPlaceBusy(false);
-    }
-  };
 
   const results = useMemo(() => {
     const term = query.trim().toLowerCase();
@@ -466,18 +317,12 @@ function FindStation() {
           rider={rider}
           center={rider}
           recenterSignal={recenterTick}
-          riderHeading={gpsMode ? heading : null}
-          selectedId={selectedId}
-          onPick={
-            locationState === "granted"
-              ? (point) => {
-                  trackingEnabled.current = false;
-                  setGpsMode(false);
-                  updateRider(point);
-                  setRecenterTick((tick) => tick + 1);
-                }
-              : undefined
+          riderHeading={
+            rider && gps && rider.lat === gps.lat && rider.lng === gps.lng
+              ? heading
+              : null
           }
+          selectedId={selectedId}
           pins={results
             .filter(
               (station) =>
@@ -606,31 +451,17 @@ function FindStation() {
                 Location access is required to find nearby stations.
               </p>
               <p className="mt-1 text-sm leading-snug text-pretty text-ink/70">
-                You can try again, or pick your starting point on the map instead.
+                Turn on location access in your browser/device settings, then try again.
+                E-Charge uses the best available device position automatically.
               </p>
 
-              <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-                <button
-                  type="button"
-                  onClick={requestLocation}
-                  className="flex min-h-[48px] flex-1 items-center justify-center rounded-xl bg-ink text-sm font-semibold text-paper transition-colors hover:bg-ink/90"
-                >
-                  {locStatus === "locating" ? "⟳ LOCATING…" : "TRY AGAIN"}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    trackingEnabled.current = false;
-                    setGpsMode(false);
-                    updateRider(null);
-                    setLocationState("granted");
-                  }}
-                  className="flex min-h-[48px] flex-1 items-center justify-center rounded-xl bg-paper/70 text-sm font-medium text-ink ring-1 ring-black/10 transition-colors hover:bg-paper"
-                >
-                  CHOOSE LOCATION ON MAP
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={requestLocation}
+                className="mt-3 flex min-h-[48px] w-full items-center justify-center rounded-xl bg-ink text-sm font-semibold text-paper transition-colors hover:bg-ink/90"
+              >
+                {locStatus === "locating" ? "⟳ LOCATING…" : "TRY AGAIN"}
+              </button>
             </div>
           ) : null}
 
@@ -638,11 +469,9 @@ function FindStation() {
             <div className="flex items-center gap-2 rounded-2xl bg-signal/12 px-4 py-3 ring-1 ring-signal/30">
               <span className="size-3 shrink-0 rounded-full bg-signal" />
               <p className="text-sm leading-snug text-pretty text-ink/80">
-                {!rider
-                  ? "Tap the map to set your starting point."
-                  : gpsMode
-                    ? "Using your live location. E-Charge continuously adjusts your position."
-                    : "Showing a searched or picked place — tap Use My Location to return."}{" "}
+                {gps
+                  ? "Using your best available device location. E-Charge keeps refining it automatically."
+                  : "Waiting for a device location fix…"}{" "}
                 Showing stations within{" "}
                 <strong className="font-semibold">{radiusKm} km</strong>,
                 nearest first.
@@ -666,26 +495,9 @@ function FindStation() {
             />
           </div>
 
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={searchPlace}
-              disabled={placeBusy || !query.trim()}
-              className="min-h-[44px] rounded-xl bg-ink px-4 text-sm font-semibold text-paper transition-colors hover:bg-ink/90 disabled:opacity-50"
-            >
-              {placeBusy ? "SEARCHING…" : "SEARCH THIS PLACE ON THE MAP"}
-            </button>
-
-            <span className="text-xs text-neutral">
-              Heading somewhere? Search a town or area to see stations there.
-            </span>
-          </div>
-
-          {placeError ? (
-            <p className="mt-2 rounded-xl bg-amber/12 px-3 py-2 text-sm text-ink ring-1 ring-amber/30">
-              {placeError}
-            </p>
-          ) : null}
+          <p className="mt-2 text-xs text-neutral">
+            Search filters stations only. Your rider location always comes from the device.
+          </p>
 
           <div className="mt-3 flex flex-wrap items-center gap-3">
             <label className="flex items-center gap-2 rounded-xl bg-paper/60 px-3 py-2 ring-1 ring-black/5">
