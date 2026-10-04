@@ -63,6 +63,7 @@ function FindStation() {
     "idle" | "locating" | "done" | "error"
   >("idle");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [gpsMode, setGpsMode] = useState(true);
 
   // True while the rider marker should follow the real device.
   const trackingEnabled = useRef(true);
