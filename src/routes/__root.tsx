@@ -128,7 +128,7 @@ export const Route =
         {
           property: "og:image",
           content:
-            "https://e-charge.magomacornelius.workers.dev/og-image.jpg",
+            "https://e-charge.magomacornelius.workers.dev/og-image.jpg?v=2",
         },
 
         {
@@ -150,7 +150,7 @@ export const Route =
         {
           name: "twitter:image",
           content:
-            "https://e-charge.magomacornelius.workers.dev/og-image.jpg",
+            "https://e-charge.magomacornelius.workers.dev/og-image.jpg?v=2",
         },
       ],
 
@@ -242,3 +242,4 @@ function RootComponent() {
     </QueryClientProvider>
   );
 }
+
