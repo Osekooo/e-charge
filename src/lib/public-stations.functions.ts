@@ -9,8 +9,8 @@ const COLUMNS =
 function publicClient() {
   // Cloudflare builds may not define the server-side SUPABASE_* vars; fall back to the
   // public VITE_* values baked in at build time so every host reads the same backend.
-  const url = process.env["SUPABASE_URL"] || import.meta.env.VITE_SUPABASE_URL;
-  const key = process.env["SUPABASE_PUBLISHABLE_KEY"] || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+  const url = process.env["SUPABASE_URL"] || import.meta.env["VITE_SUPABASE_URL"];
+  const key = process.env["SUPABASE_PUBLISHABLE_KEY"] || import.meta.env["VITE_SUPABASE_PUBLISHABLE_KEY"];
   if (!url || !key) throw new Error("Backend connection is not configured on this host.");
   return createClient<Database>(url, key, {
     auth: { storage: undefined, persistSession: false, autoRefreshToken: false },
