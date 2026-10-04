@@ -1,3 +1,4 @@
+```tsx
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   Outlet,
@@ -128,7 +129,7 @@ export const Route =
         {
           property: "og:image",
           content:
-            "https://e-charge.magomacornelius.workers.dev/og-image.png",
+            "https://e-charge.magomacornelius.workers.dev/og-image.jpg",
         },
 
         {
@@ -150,7 +151,7 @@ export const Route =
         {
           name: "twitter:image",
           content:
-            "https://e-charge.magomacornelius.workers.dev/og-image.png",
+            "https://e-charge.magomacornelius.workers.dev/og-image.jpg",
         },
       ],
 
@@ -242,3 +243,4 @@ function RootComponent() {
     </QueryClientProvider>
   );
 }
+```
