@@ -1,4 +1,5 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
+import { Eye, EyeOff } from "lucide-react";
 
 export function Field({
   label,
@@ -22,7 +23,21 @@ const inputClass =
   "mt-1.5 flex min-h-[48px] w-full rounded-xl bg-paper/70 px-4 text-base text-ink ring-1 ring-black/10 placeholder:text-neutral focus:outline-none focus:ring-2 focus:ring-signal";
 
 export function TextInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
-  return <input {...props} className={inputClass} />;
+  const [show, setShow] = useState(false);
+  if (props.type !== "password") return <input {...props} className={inputClass} />;
+  return (
+    <span className="relative block">
+      <input {...props} type={show ? "text" : "password"} className={`${inputClass} pr-12`} />
+      <button
+        type="button"
+        onClick={() => setShow((v) => !v)}
+        aria-label={show ? "Hide password" : "Show password"}
+        className="absolute right-1.5 top-1/2 mt-[3px] flex size-10 -translate-y-1/2 items-center justify-center rounded-lg text-ink/60 transition-colors hover:bg-ink/5 hover:text-ink"
+      >
+        {show ? <EyeOff className="size-[18px]" /> : <Eye className="size-[18px]" />}
+      </button>
+    </span>
+  );
 }
 
 export function TextArea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
@@ -68,7 +83,7 @@ export function PrimaryButton({
     <button
       type={type}
       disabled={disabled}
-      className="flex min-h-[52px] w-full items-center justify-center rounded-2xl bg-signal px-5 text-base font-semibold text-ink ring-1 ring-signal transition-colors hover:bg-signal/90 disabled:cursor-not-allowed disabled:opacity-60"
+      className="flex min-h-[52px] w-full items-center justify-center rounded-2xl bg-signal px-5 text-base font-semibold text-ink ring-1 ring-signal transition-all hover:bg-signal/90 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
     >
       {children}
     </button>
@@ -91,7 +106,7 @@ export function GhostButton({
       type={type}
       onClick={onClick}
       disabled={disabled}
-      className="flex min-h-[52px] w-full items-center justify-center rounded-2xl bg-paper/60 px-5 text-base font-medium text-ink ring-1 ring-black/10 transition-colors hover:bg-paper/80 disabled:opacity-60"
+      className="flex min-h-[52px] w-full items-center justify-center rounded-2xl bg-paper/60 px-5 text-base font-medium text-ink ring-1 ring-black/10 transition-all hover:bg-paper/80 active:scale-[0.98] disabled:opacity-60"
     >
       {children}
     </button>

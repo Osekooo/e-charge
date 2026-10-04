@@ -28,7 +28,12 @@ export function LeafletMap({
   onPick,
   picked,
   recenterSignal = 0,
+  riderHeading = null,
+  selectedId = null,
 }: {
+  /** Degrees from north; only pass when GPS heading is reliable (moving). */
+  riderHeading?: number | null;
+  selectedId?: string | null;
   className?: string;
   pins?: MapPin[];
   rider?: { lat: number; lng: number } | null;
@@ -83,22 +88,38 @@ export function LeafletMap({
     layer.current.clearLayers();
     const bounds: [number, number][] = [];
     for (const p of pins) {
+      const sel = p.id === selectedId;
+      const c = toneVar[p.tone];
+      const size = sel ? 40 : 32;
       const icon = Lf.divIcon({
         className: "",
-        html: `<div style="display:inline-flex;align-items:center;gap:4px;white-space:nowrap;transform:translate(-50%,-100%);background:var(--paper);color:var(--ink);font:600 11px/1 'IBM Plex Sans',sans-serif;padding:5px 8px;border-radius:999px;box-shadow:0 2px 6px rgba(0,0,0,.25)"><span style="width:8px;height:8px;border-radius:999px;background:${toneVar[p.tone]}"></span>${escapeHtml(p.label)}</div>`,
+        iconSize: [size, size],
+        iconAnchor: [size / 2, size],
+        html: `<div title="${escapeHtml(p.label)}" style="position:relative;width:${size}px;height:${size}px">
+          ${p.tone === "signal" ? `<span class="ec-pin-pulse" style="background:${c}"></span>` : ""}
+          <div style="position:absolute;inset:0;border-radius:50% 50% 50% 6px;transform:rotate(-45deg);background:${c};border:${sel ? 3 : 2}px solid var(--paper);box-shadow:0 0 ${sel ? 18 : 10}px ${c},0 3px 8px rgba(0,0,0,.35)"></div>
+          <svg viewBox="0 0 24 24" style="position:absolute;inset:22%;width:56%;height:56%" fill="var(--ink)"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg>
+        </div>`,
       });
-      const mk = Lf.marker([p.lat, p.lng], { icon }).addTo(layer.current);
+      const mk = Lf.marker([p.lat, p.lng], { icon, zIndexOffset: sel ? 1000 : 0, title: p.label }).addTo(layer.current);
       if (p.onClick) mk.on("click", p.onClick);
       bounds.push([p.lat, p.lng]);
     }
     if (rider) {
-      Lf.circleMarker([rider.lat, rider.lng], {
-        radius: 8,
-        color: "#fff",
-        weight: 3,
-        fillColor: cssVar("--signal"),
-        fillOpacity: 1,
-      }).addTo(layer.current);
+      const rot = riderHeading ?? 0;
+      const icon = Lf.divIcon({
+        className: "",
+        iconSize: [44, 44],
+        iconAnchor: [22, 22],
+        html: `<div style="position:relative;width:44px;height:44px">
+          <span class="ec-pin-pulse" style="background:var(--signal)"></span>
+          <div style="position:absolute;inset:4px;border-radius:999px;background:var(--ink);border:3px solid var(--paper);box-shadow:0 3px 10px rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;transition:transform .4s ease;transform:rotate(${rot}deg)">
+            ${riderHeading != null ? '<span style="position:absolute;top:-9px;left:50%;transform:translateX(-50%);border:6px solid transparent;border-bottom:8px solid var(--signal)"></span>' : ""}
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="var(--signal)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="transform:rotate(-90deg)"><circle cx="5" cy="16" r="3"/><circle cx="19" cy="16" r="3"/><path d="M5 16h5l4-6h3l2 6M14 10l-2-3H9M17 10l1-3h2"/></svg>
+          </div>
+        </div>`,
+      });
+      Lf.marker([rider.lat, rider.lng], { icon, zIndexOffset: 2000, title: "You are here" }).addTo(layer.current);
       bounds.push([rider.lat, rider.lng]);
     }
     if (picked) {
@@ -120,7 +141,7 @@ export function LeafletMap({
     draw();
     if (center && map.current) map.current.setView([center.lat, center.lng], map.current.getZoom());
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pins, rider?.lat, rider?.lng, picked?.lat, picked?.lng, center?.lat, center?.lng, recenterSignal]);
+  }, [pins, rider?.lat, rider?.lng, picked?.lat, picked?.lng, center?.lat, center?.lng, recenterSignal, riderHeading, selectedId]);
 
   return <div ref={el} className={cn("relative z-0 bg-secondary", className)} />;
 }

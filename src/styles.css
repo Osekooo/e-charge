@@ -209,3 +209,16 @@
 a[href*="lovable.dev"][style*="fixed"] {
   display: none !important;
 }
+
+.ec-pin-pulse {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  opacity: 0.35;
+  animation: ec-pulse 2.2s ease-out infinite;
+}
+@keyframes ec-pulse {
+  0% { transform: scale(0.6); opacity: 0.45; }
+  100% { transform: scale(1.8); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) { .ec-pin-pulse { animation: none; } }

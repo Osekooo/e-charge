@@ -81,6 +81,17 @@ function AdminDashboard() {
         ))}
       </div>
 
+      <button
+        type="button"
+        onClick={async () => {
+          await supabase.auth.signOut();
+          qc.clear();
+          window.location.assign("/admin/login");
+        }}
+        className="mt-4 min-h-[44px] rounded-xl bg-paper/10 px-4 text-sm font-semibold text-paper ring-1 ring-border"
+      >
+        SIGN OUT
+      </button>
       <div className="mt-6 flex flex-wrap gap-2">
         {tabs.map((s) => (
           <button
@@ -112,7 +123,7 @@ function AdminDashboard() {
 }
 
 function ReviewCard({ st, onDone }: { st: StationRow; onDone: () => void }) {
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<Status | null>(null);
   const [err, setErr] = useState("");
   const photos = useQuery({
     queryKey: ["admin-photos", st.id],
@@ -120,10 +131,10 @@ function ReviewCard({ st, onDone }: { st: StationRow; onDone: () => void }) {
   });
 
   const setStatus = async (review_status: Status) => {
-    setBusy(true);
+    setBusy(review_status);
     setErr("");
     const { error } = await supabase.from("stations").update({ review_status }).eq("id", st.id);
-    setBusy(false);
+    setBusy(null);
     if (error) setErr(error.message);
     else onDone();
   };
@@ -189,14 +200,14 @@ function ReviewCard({ st, onDone }: { st: StationRow; onDone: () => void }) {
           <button
             key={a.to}
             type="button"
-            disabled={busy}
+            disabled={busy !== null}
             onClick={() => setStatus(a.to)}
             className={cn(
-              "flex min-h-[46px] flex-1 items-center justify-center rounded-xl text-sm font-semibold ring-1 disabled:opacity-60",
+              "flex min-h-[46px] flex-1 items-center justify-center rounded-xl text-sm font-semibold ring-1 transition-all active:scale-[0.98] disabled:opacity-60",
               a.primary ? "bg-signal text-ink ring-signal" : "bg-paper text-ink ring-black/10",
             )}
           >
-            {a.label}
+            {busy === a.to ? "WORKING…" : a.label}
           </button>
         ))}
       </div>

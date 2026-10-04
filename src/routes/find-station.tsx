@@ -53,20 +53,41 @@ function FindStation() {
     queryFn: () => getApprovedStations(),
   });
 
+  // `gps` is the rider's real position; `rider` is the search origin (may be a searched place).
+  const [gps, setGps] = useState<LatLng | null>(null);
+  const [heading, setHeading] = useState<number | null>(null);
+  const [locStatus, setLocStatus] = useState<"idle" | "locating" | "done" | "error">("idle");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const requestLocation = () => {
     if (typeof navigator === "undefined" || !navigator.geolocation) {
       setLocationState("denied");
+      setLocStatus("error");
       return;
     }
+    setLocStatus("locating");
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        setRider({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        const p = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        setGps(p);
+        setRider(p);
+        // Heading is only trustworthy while moving; otherwise keep the marker unrotated.
+        const { heading: h, speed } = pos.coords;
+        setHeading(h != null && !Number.isNaN(h) && (speed ?? 0) > 1 ? h : null);
         setLocationState("granted");
+        setRecenterTick((t) => t + 1);
+        setLocStatus("done");
+        setTimeout(() => setLocStatus("idle"), 1800);
       },
-      () => setLocationState("denied"),
-      { enableHighAccuracy: true, timeout: 15000 },
+      () => {
+        setLocationState("denied");
+        setLocStatus("error");
+        setTimeout(() => setLocStatus("idle"), 2500);
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
     );
   };
+  const locLabel =
+    locStatus === "locating" ? "⟳ LOCATING…" : locStatus === "done" ? "✓ LOCATION UPDATED" : locStatus === "error" ? "LOCATION UNAVAILABLE" : "◎ USE MY LOCATION";
 
   // Look up a place in Kenya (OpenStreetMap Nominatim — free, no API key) so
   // riders can check stations where they are heading, not just where they are.
@@ -115,6 +136,8 @@ function FindStation() {
       .sort((a, b) => (a.distanceKm || 1e9) - (b.distanceKm || 1e9));
   }, [rows, rider, query, radiusKm]);
 
+  const selected = selectedId ? results.find((r) => r.id === selectedId) ?? null : null;
+
   return (
     <div className="flex min-h-screen flex-col bg-ink">
       <div className="relative">
@@ -130,6 +153,8 @@ function FindStation() {
           rider={rider}
           center={rider}
           recenterSignal={recenterTick}
+          riderHeading={rider && gps && rider.lat === gps.lat && rider.lng === gps.lng ? heading : null}
+          selectedId={selectedId}
           onPick={locationState === "granted" ? (p) => setRider(p) : undefined}
           pins={results
             .filter((st) => st.latitude != null && st.longitude != null)
@@ -139,19 +164,50 @@ function FindStation() {
               lng: st.longitude!,
               tone: markerTone(st),
               label: `${st.name} · ${markerLabel(st)}`,
-              onClick: () => navigate({ to: "/stations/$stationId", params: { stationId: st.id } }),
+              onClick: () => setSelectedId(st.id),
             }))}
         />
-        {rider ? (
-          <button
-            type="button"
-            onClick={() => setRecenterTick((t) => t + 1)}
-            aria-label="Re-center map on my location"
-            className="absolute bottom-4 right-3 z-[500] flex min-h-[48px] items-center gap-2 rounded-xl bg-paper px-4 text-sm font-semibold text-ink shadow-lg ring-1 ring-black/10 transition-colors hover:bg-paper/90"
-          >
-            <span className="size-2.5 rounded-full bg-signal" />
-            RE-CENTER
-          </button>
+        <button
+          type="button"
+          onClick={requestLocation}
+          disabled={locStatus === "locating"}
+          aria-label="Use my current location"
+          className={`absolute bottom-4 right-3 z-[500] flex min-h-[48px] items-center gap-2 rounded-xl px-4 text-sm font-semibold shadow-lg ring-1 transition-all active:scale-95 ${locStatus === "done" ? "bg-signal text-ink ring-signal" : "bg-paper text-ink ring-black/10 hover:bg-paper/90"}`}
+        >
+          <span className={locStatus === "locating" ? "inline-block animate-spin" : ""}>{locLabel.slice(0, 2)}</span>
+          {locLabel.slice(2)}
+        </button>
+        {selected ? (
+          <div className="absolute inset-x-3 top-3 z-[500] rounded-2xl bg-paper/95 p-3 text-ink shadow-xl ring-1 ring-black/10 sm:left-auto sm:w-80">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <p className="truncate font-display text-[15px] font-semibold">{selected.name}</p>
+                <p className="text-xs text-ink/60">
+                  <span className={selected.status === "open" ? "font-semibold text-signal" : "font-semibold text-danger"}>
+                    {selected.status === "open" ? "Open now" : "Closed"}
+                  </span>
+                  {Number.isFinite(selected.distanceKm) ? ` · ${selected.distanceKm} km away` : ""}
+                </p>
+              </div>
+              <button type="button" onClick={() => setSelectedId(null)} aria-label="Close" className="size-8 shrink-0 rounded-lg text-ink/60 hover:bg-ink/5">✕</button>
+            </div>
+            <div className="mt-2 flex gap-2">
+              <button
+                type="button"
+                onClick={() => navigate({ to: "/navigate/$stationId", params: { stationId: selected.id } })}
+                className="flex min-h-[44px] flex-1 items-center justify-center rounded-xl bg-signal text-sm font-semibold text-ink transition-all active:scale-95"
+              >
+                START NAVIGATION
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate({ to: "/stations/$stationId", params: { stationId: selected.id } })}
+                className="flex min-h-[44px] items-center justify-center rounded-xl bg-paper px-3 text-sm font-medium ring-1 ring-black/10 transition-all active:scale-95"
+              >
+                DETAILS
+              </button>
+            </div>
+          </div>
         ) : null}
       </div>
 
@@ -172,7 +228,7 @@ function FindStation() {
                 onClick={requestLocation}
                 className="mt-3 flex min-h-[48px] w-full items-center justify-center rounded-xl bg-signal text-sm font-semibold text-ink ring-1 ring-signal transition-colors hover:bg-signal/90"
               >
-                USE MY LOCATION
+                {locLabel}
               </button>
             </div>
           ) : null}
@@ -191,7 +247,7 @@ function FindStation() {
                   onClick={requestLocation}
                   className="flex min-h-[48px] flex-1 items-center justify-center rounded-xl bg-ink text-sm font-semibold text-paper transition-colors hover:bg-ink/90"
                 >
-                  TRY AGAIN
+                  {locStatus === "locating" ? "⟳ LOCATING…" : "TRY AGAIN"}
                 </button>
                 <button
                   type="button"
@@ -208,7 +264,7 @@ function FindStation() {
             <div className="flex items-center gap-2 rounded-2xl bg-signal/12 px-4 py-3 ring-1 ring-signal/30">
               <span className="size-3 shrink-0 rounded-full bg-signal" />
               <p className="text-sm leading-snug text-pretty text-ink/80">
-                {rider ? "Using your location (tap the map to move it)." : "Tap the map to set your starting point."} Showing stations within{" "}
+                {!rider ? "Tap the map to set your starting point." : gps && rider.lat === gps.lat && rider.lng === gps.lng ? "Using your location." : "Showing a searched or picked place — tap Use My Location to return."} Showing stations within{" "}
                 <strong className="font-semibold">{radiusKm} km</strong>, nearest first.
               </p>
             </div>
