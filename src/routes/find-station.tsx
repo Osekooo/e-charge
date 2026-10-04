@@ -87,7 +87,7 @@ function FindStation() {
     );
   };
   const locLabel =
-    locStatus === "locating" ? "⟳ LOCATING…" : locStatus === "done" ? "✓ LOCATION UPDATED" : locStatus === "error" ? "LOCATION UNAVAILABLE" : "📍 USE MY LOCATION";
+    locStatus === "locating" ? "⟳ LOCATING…" : locStatus === "done" ? "✓ LOCATION UPDATED" : locStatus === "error" ? "LOCATION UNAVAILABLE" : "◎ USE MY LOCATION";
 
   // Look up a place in Kenya (OpenStreetMap Nominatim — free, no API key) so
   // riders can check stations where they are heading, not just where they are.
