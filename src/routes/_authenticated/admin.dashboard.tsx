@@ -81,6 +81,17 @@ function AdminDashboard() {
         ))}
       </div>
 
+      <button
+        type="button"
+        onClick={async () => {
+          await supabase.auth.signOut();
+          qc.clear();
+          window.location.assign("/admin/login");
+        }}
+        className="mt-4 min-h-[44px] rounded-xl bg-paper/10 px-4 text-sm font-semibold text-paper ring-1 ring-border"
+      >
+        SIGN OUT
+      </button>
       <div className="mt-6 flex flex-wrap gap-2">
         {tabs.map((s) => (
           <button
