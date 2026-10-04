@@ -111,8 +111,14 @@ function FindStation() {
       }
       setRider({ lat: Number(hit.lat), lng: Number(hit.lon) });
       setLocationState("granted");
+      setRecenterTick((t) => t + 1);
       setQuery("");
-      setRadiusKm(10);
+      setRadiusKm(15);
+
+      // Pan/scroll the viewport directly to the top where the map is located
+      if (typeof window !== "undefined") {
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
     } catch {
       setPlaceError("Place search failed. Check your connection and try again.");
     } finally {
