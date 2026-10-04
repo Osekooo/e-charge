@@ -20,7 +20,7 @@ export function SiteFooter() {
           <Link to="/contact" className="hover:text-paper">
             Contact
           </Link>
-          <Link to="/admin/dashboard" className="hover:text-paper">
+          <Link to="/admin/login" className="hover:text-paper">
             Admin
           </Link>
         </div>
